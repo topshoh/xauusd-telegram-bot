@@ -1,0 +1,30 @@
+name: XAUUSD COT Weekly Update
+
+# Запускается каждую пятницу в 20:00 UTC (это уже после официальной
+# публикации CFTC в 15:30 ET / примерно 19:30 UTC летом).
+# Плюс можно запустить вручную через вкладку Actions ("Run workflow").
+on:
+  schedule:
+    - cron: "0 20 * * 5"
+  workflow_dispatch: {}
+
+jobs:
+  send-cot-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Send COT Telegram update
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python xauusd_cot_telegram_bot.py
