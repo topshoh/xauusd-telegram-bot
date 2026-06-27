@@ -22,6 +22,16 @@ from datetime import datetime, timezone
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
+# --- ВРЕМЕННАЯ ДИАГНОСТИКА (можно удалить после того как всё заработает) ---
+# Безопасно печатает длину и первые/последние символы токена, не раскрывая
+# его целиком в логах — нужно, чтобы понять, дошёл ли секрет правильно.
+print(f"[DEBUG] Длина токена: {len(TELEGRAM_BOT_TOKEN)} символов")
+print(f"[DEBUG] Токен начинается на: {TELEGRAM_BOT_TOKEN[:6]!r}")
+print(f"[DEBUG] Токен заканчивается на: {TELEGRAM_BOT_TOKEN[-6:]!r}")
+print(f"[DEBUG] Есть ли пробелы по краям: {TELEGRAM_BOT_TOKEN != TELEGRAM_BOT_TOKEN.strip()}")
+print(f"[DEBUG] Chat ID: {TELEGRAM_CHAT_ID!r} (длина: {len(TELEGRAM_CHAT_ID)})")
+# --- конец временной диагностики ---
+
 # --- Этот блок обновляешь вручную, когда просишь меня "обнови дашборд" ---
 # Просто попроси меня в чате: "обнови macro_summary для телеграм-бота" —
 # и я перепишу текст ниже под актуальную картину.
