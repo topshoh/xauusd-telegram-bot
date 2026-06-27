@@ -1,0 +1,94 @@
+"""
+xauusd_telegram_bot.py
+
+Скрипт берёт живую цену золота (gold-api.com) и отправляет короткую
+сводку в Telegram-чат. Предназначен для запуска по расписанию через
+GitHub Actions — то есть работает даже когда твой компьютер выключен
+и дашборд в браузере закрыт.
+
+Что НЕ делает этот скрипт (важно понимать):
+- Не ищет свежие новости/макрофакторы сам — для этого нужен я (Claude) в
+  чате. Этот скрипт отправляет только живую цену + последний срез
+  макро-вывода, который ты вручную обновляешь в этом файле, когда просишь
+  меня "обнови дашборд".
+- Не даёт торговых сигналов и не предсказывает цену — см. WARNING_TEXT ниже.
+"""
+
+import os
+import requests
+from datetime import datetime, timezone
+
+# --- Настройки из переменных окружения (задаются в GitHub Secrets, см. README) ---
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+
+# --- Этот блок обновляешь вручную, когда просишь меня "обнови дашборд" ---
+# Просто попроси меня в чате: "обнови macro_summary для телеграм-бота" —
+# и я перепишу текст ниже под актуальную картину.
+MACRO_SUMMARY = (
+    "Ставка ФРС: ястребиный тон (давит на золото)\n"
+    "Инфляция (PCE): в рамках ожиданий (слегка поддержало золото)\n"
+    "Доллар (DXY): немного ослаб (слегка поддержало золото)\n"
+    "Геополитика (Иран): хрупкое перемирие (неопределённость)\n"
+    "Вердикт: боковик, не чёткий long и не чёткий short"
+)
+MACRO_SUMMARY_DATE = "27 июня 2026"
+
+WARNING_TEXT = (
+    "Это не торговый сигнал и не прогноз цены — только живые данные и "
+    "контекст для самостоятельного анализа."
+)
+
+
+def fetch_gold_price() -> float | None:
+    """Получить текущую цену золота с gold-api.com."""
+    try:
+        response = requests.get("https://api.gold-api.com/price/XAU", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("price") or data.get("price_usd")
+    except Exception as exc:
+        print(f"Ошибка получения цены: {exc}")
+        return None
+
+
+def build_message(price: float | None) -> str:
+    now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
+
+    if price is None:
+        price_line = "⚠️ Не удалось получить текущую цену (проблема с API)"
+    else:
+        price_line = f"💰 XAU/USD: <b>${price:,.2f}</b>"
+
+    message = (
+        f"<b>XAUUSD — сводка</b>\n"
+        f"{now}\n\n"
+        f"{price_line}\n\n"
+        f"<b>Макро-контекст</b> (срез на {MACRO_SUMMARY_DATE}):\n"
+        f"{MACRO_SUMMARY}\n\n"
+        f"<i>{WARNING_TEXT}</i>"
+    )
+    return message
+
+
+def send_telegram_message(text: str) -> None:
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    response = requests.post(url, json=payload, timeout=10)
+    response.raise_for_status()
+    print("Сообщение отправлено успешно.")
+
+
+def main() -> None:
+    price = fetch_gold_price()
+    message = build_message(price)
+    send_telegram_message(message)
+
+
+if __name__ == "__main__":
+    main()
