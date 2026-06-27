@@ -41,22 +41,60 @@ WARNING_TEXT = (
 
 
 def fetch_gold_price() -> float | None:
-    """Получить текущую цену золота с gold-api.com."""
+    """
+    Получить текущую цену золота. Сначала пробует основной источник
+    (gold-api.com), при сбое — резервный (Yahoo Finance, без API-ключа).
+    Делает до 2 попыток на каждый источник, чтобы единичный сетевой
+    сбой не оставлял сообщение без цены.
+    """
+    # --- Источник 1: gold-api.com ---
+    for attempt in range(2):
+        try:
+            response = requests.get(
+                "https://api.gold-api.com/price/XAU", timeout=15
+            )
+            response.raise_for_status()
+            data = response.json()
+            price = data.get("price") or data.get("price_usd")
+            if price is not None:
+                return float(price)
+            print(f"gold-api.com вернул ответ без цены: {data}")
+        except Exception as exc:
+            print(f"Попытка {attempt + 1}, gold-api.com: {exc}")
+
+    # --- Источник 2 (резервный): Yahoo Finance, фьючерс на золото (GC=F) ---
     try:
-        response = requests.get("https://api.gold-api.com/price/XAU", timeout=10)
+        response = requests.get(
+            "https://query1.finance.yahoo.com/v8/finance/chart/GC=F",
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
         response.raise_for_status()
         data = response.json()
-        return data.get("price") or data.get("price_usd")
+        price = (
+            data.get("chart", {})
+            .get("result", [{}])[0]
+            .get("meta", {})
+            .get("regularMarketPrice")
+        )
+        if price is not None:
+            return float(price)
+        print(f"Yahoo Finance вернул ответ без цены: {data}")
     except Exception as exc:
-        print(f"Ошибка получения цены: {exc}")
-        return None
+        print(f"Резервный источник (Yahoo Finance) тоже не сработал: {exc}")
+
+    return None
 
 
 def build_message(price: float | None) -> str:
     now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
 
     if price is None:
-        price_line = "⚠️ Не удалось получить текущую цену (проблема с API)"
+        price_line = (
+            "⚠️ Не удалось получить цену из обоих источников "
+            "(gold-api.com и Yahoo Finance). Проверь цену вручную, "
+            "например на tradingview.com или investing.com."
+        )
     else:
         price_line = f"💰 XAU/USD: <b>${price:,.2f}</b>"
 
