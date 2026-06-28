@@ -1,7 +1,7 @@
 name: XAUUSD Alerts (events + price spikes)
 
-# Запускается каждые 15 минут. JBlanked API имеет лимит 1 запрос/5 минут
-# на бесплатном тарифе, 15 минут — безопасный запас.
+# Запускается каждые 15 минут. Календарь событий берётся через Trading
+# Economics API (guest:guest, публичный демо-доступ).
 # Плюс можно запустить вручную через вкладку Actions ("Run workflow").
 on:
   schedule:
@@ -29,6 +29,5 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          JBLANKED_API_KEY: ${{ secrets.JBLANKED_API_KEY }}
           GITHUB_TOKEN_FOR_STATE: ${{ secrets.GITHUB_TOKEN }}
         run: python xauusd_alerts_bot.py
