@@ -203,6 +203,7 @@ def fetch_calendar_events() -> list[dict]:
             print(f"JBlanked API вернул статус {response.status_code}: {response.text[:300]}")
             return []
         events = response.json()
+        print(f"[ЛОГ] JBlanked API вернул всего {len(events)} событий (до фильтрации).")
     except Exception as exc:
         print(f"Ошибка получения календаря: {exc}")
         return []
@@ -384,6 +385,11 @@ def main() -> None:
 
     # --- 1. Проверка предстоящих событий ---
     events = fetch_calendar_events()
+    print(f"[ЛОГ] Получено {len(events)} подходящих событий от JBlanked API.")
+    for e in events:
+        mins = (e["date_et"].astimezone(timezone.utc) - now_utc).total_seconds() / 60
+        print(f"  - {e['name']} | через {mins:.0f} мин | прогноз={e.get('forecast')} пред={e.get('previous')}")
+
     sent_warnings = set(state.get("sent_warnings", []))
 
     for event in events:
@@ -405,6 +411,7 @@ def main() -> None:
 
     # --- 2. Проверка резкого движения цены ---
     current_price = fetch_gold_price()
+    print(f"[ЛОГ] Текущая цена золота: {current_price}")
     if current_price is not None:
         last_price = state.get("last_price")
         last_price_time_str = state.get("last_price_time")
@@ -413,10 +420,13 @@ def main() -> None:
             last_price_time = datetime.fromisoformat(last_price_time_str)
             minutes_elapsed = (now_utc - last_price_time).total_seconds() / 60
             change_pct = abs((current_price - last_price) / last_price * 100)
+            print(f"[ЛОГ] Предыдущая цена: {last_price} ({minutes_elapsed:.1f} мин назад), изменение: {change_pct:.3f}% (порог: {PRICE_SPIKE_THRESHOLD_PERCENT}%)")
 
             if change_pct >= PRICE_SPIKE_THRESHOLD_PERCENT and minutes_elapsed <= 35:
                 message = build_spike_alert_message(last_price, current_price, minutes_elapsed)
                 send_telegram_message(message)
+        else:
+            print("[ЛОГ] Нет предыдущей цены для сравнения (первый запуск).")
 
         state["last_price"] = current_price
         state["last_price_time"] = now_utc.isoformat()
