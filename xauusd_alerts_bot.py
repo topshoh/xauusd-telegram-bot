@@ -373,9 +373,11 @@ def send_telegram_message(text: str) -> None:
 def main() -> None:
     now_tashkent = datetime.now(TASHKENT_TZ)
 
-    if is_market_closed(now_tashkent):
-        print(f"Рынок закрыт (сейчас {now_tashkent.strftime('%A %H:%M')} по Ташкенту). Алерты не отправляются.")
-        return
+    # ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ТЕСТИРОВАНИЯ — вернуть обратно после проверки!
+    # if is_market_closed(now_tashkent):
+    #     print(f"Рынок закрыт (сейчас {now_tashkent.strftime('%A %H:%M')} по Ташкенту). Алерты не отправляются.")
+    #     return
+    print(f"[ТЕСТ] Проверка выходных временно отключена. Сейчас {now_tashkent.strftime('%A %H:%M')} по Ташкенту.")
 
     state = load_state()
     now_utc = datetime.now(timezone.utc)
