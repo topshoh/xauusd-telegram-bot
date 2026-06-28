@@ -31,7 +31,6 @@ from zoneinfo import ZoneInfo
 # --- Настройки из переменных окружения ---
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-JBLANKED_API_KEY = os.environ["JBLANKED_API_KEY"]
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN_FOR_STATE")  # для хранения состояния между запусками
 GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY", "")  # автоматически доступно в GitHub Actions
 
@@ -189,21 +188,25 @@ def fetch_gold_price() -> float | None:
 
 def fetch_calendar_events() -> list[dict]:
     """
-    Получает сегодняшние события по USD через JBlanked Calendar API.
-    Возвращает список событий с полями Name, Date (datetime), Forecast, Previous.
+    Получает сегодняшние и завтрашние высокоприоритетные события по США
+    через Trading Economics API (guest:guest — публичный демо-доступ,
+    официально документированный на docs.tradingeconomics.com).
+    Возвращает список событий с полями name, date (datetime), forecast, previous.
     """
-    url = "https://www.jblanked.com/news/api/mql5/calendar/today/"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Api-Key {JBLANKED_API_KEY}",
-    }
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    url = (
+        f"https://api.tradingeconomics.com/calendar/country/united%20states/"
+        f"{today}/{tomorrow}?c=guest:guest&importance=3&f=json"
+    )
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, timeout=15)
         if response.status_code != 200:
-            print(f"JBlanked API вернул статус {response.status_code}: {response.text[:300]}")
+            print(f"Trading Economics API вернул статус {response.status_code}: {response.text[:300]}")
             return []
         events = response.json()
-        print(f"[ЛОГ] JBlanked API вернул всего {len(events)} событий (до фильтрации).")
+        print(f"[ЛОГ] Trading Economics API вернул {len(events)} событий высокой важности.")
     except Exception as exc:
         print(f"Ошибка получения календаря: {exc}")
         return []
@@ -211,25 +214,23 @@ def fetch_calendar_events() -> list[dict]:
     parsed = []
     for event in events:
         try:
-            if event.get("Currency") != "USD":
-                continue
-            name = event.get("Name", "")
+            name = event.get("Event", "")
             if not any(kw.lower() in name.lower() for kw in HIGH_IMPACT_KEYWORDS):
                 continue
-            # Формат даты в JBlanked: "2026.06.27 15:30:00" — это Eastern Time
+            # Формат даты в Trading Economics: "2026-06-27T15:30:00" — это уже UTC
             date_str = event.get("Date", "")
             if not date_str:
                 continue
-            event_dt_et = datetime.strptime(date_str, "%Y.%m.%d %H:%M:%S")
-            event_dt_et = event_dt_et.replace(tzinfo=ZoneInfo("America/New_York"))
+            event_dt_utc = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S")
+            event_dt_utc = event_dt_utc.replace(tzinfo=timezone.utc)
 
             parsed.append({
-                "id": event.get("Name", "") + date_str,  # простой уникальный id
+                "id": str(event.get("CalendarId", name + date_str)),
                 "name": name,
-                "date_et": event_dt_et,
-                "forecast": event.get("Forecast"),
+                "date_et": event_dt_utc,  # имя поля сохранено для совместимости с остальным кодом, но теперь это уже UTC
+                "forecast": event.get("Forecast") or event.get("TEForecast"),
                 "previous": event.get("Previous"),
-                "impact": event.get("Impact"),
+                "impact": event.get("Importance"),
             })
         except Exception as exc:
             print(f"Не удалось разобрать событие {event}: {exc}")
