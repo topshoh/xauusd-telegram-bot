@@ -17,9 +17,26 @@ CFTC публикует сырой CSV без понятных названий 
 import os
 import requests
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+
+# --- Часы, когда рынок золота закрыт (см. подробности в xauusd_telegram_bot.py) ---
+TASHKENT_TZ = ZoneInfo("Asia/Tashkent")
+
+
+def is_market_closed(now_tashkent: datetime) -> bool:
+    """Закрыт: с субботы 02:00 до понедельника 03:00 по Ташкенту."""
+    weekday = now_tashkent.weekday()
+    hour = now_tashkent.hour
+    if weekday == 5 and hour >= 2:
+        return True
+    if weekday == 6:
+        return True
+    if weekday == 0 and hour < 3:
+        return True
+    return False
 
 # --- Обновляется вручную при каждом новом отчёте CFTC (по пятницам) ---
 # Формат: (название, long, short, net, вердикт, пояснение)
@@ -108,6 +125,15 @@ def send_telegram_message(text: str) -> None:
 
 
 def main() -> None:
+    now_tashkent = datetime.now(TASHKENT_TZ)
+
+    if is_market_closed(now_tashkent):
+        print(
+            f"Рынок золота закрыт (сейчас {now_tashkent.strftime('%A %H:%M')} "
+            f"по Ташкенту). COT-сообщение не отправляется."
+        )
+        return
+
     message = build_message()
     send_telegram_message(message)
 
