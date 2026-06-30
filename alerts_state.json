@@ -1,5 +1,7 @@
 {
-  "last_price": 4019.699951,
-  "last_price_time": "2026-06-30T08:47:11.917074+00:00",
-  "sent_warnings": []
+  "last_price": 4018.899902,
+  "last_price_time": "2026-06-30T08:51:29.733153+00:00",
+  "sent_warnings": [
+    "TEST-2026-06-30-cpi_60m"
+  ]
 }
