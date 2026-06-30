@@ -188,55 +188,61 @@ def fetch_gold_price() -> float | None:
 
 def fetch_calendar_events() -> list[dict]:
     """
-    Получает сегодняшние и завтрашние высокоприоритетные события по США
-    через Trading Economics API (guest:guest — публичный демо-доступ,
-    официально документированный на docs.tradingeconomics.com).
-    Возвращает список событий с полями name, date (datetime), forecast, previous.
-    """
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+    Возвращает список известных предстоящих важных событий.
 
-    url = (
-        f"https://api.tradingeconomics.com/calendar/country/united%20states/"
-        f"{today}/{tomorrow}?c=guest:guest&importance=3&f=json"
-    )
-    try:
-        response = requests.get(url, timeout=15)
-        if response.status_code != 200:
-            print(f"Trading Economics API вернул статус {response.status_code}: {response.text[:300]}")
-            return []
-        events = response.json()
-        print(f"[ЛОГ] Trading Economics API вернул {len(events)} событий высокой важности.")
-    except Exception as exc:
-        print(f"Ошибка получения календаря: {exc}")
-        return []
+    ВАЖНО: после трёх неудачных попыток найти надёжный бесплатный API
+    календаря (JBlanked — лимит 1 запрос/день, Finnhub — экономический
+    календарь требует платной подписки, Trading Economics — гостевой
+    доступ полностью отключён), календарь ведётся вручную в этом списке.
+
+    Обновляется при каждом "обнови дашборд" — туда же, где обновляются
+    макрофакторы. Здесь нужно вписывать точную дату/время в UTC и
+    форекаст/предыдущее значение, которые видно на дашборде в разделе
+    "Календарь ближайших событий".
+    """
+    print(f"[ЛОГ] Используется ручной список событий ({len(KNOWN_EVENTS)} событий).")
+    now_utc = datetime.now(timezone.utc)
 
     parsed = []
-    for event in events:
-        try:
-            name = event.get("Event", "")
-            if not any(kw.lower() in name.lower() for kw in HIGH_IMPACT_KEYWORDS):
-                continue
-            # Формат даты в Trading Economics: "2026-06-27T15:30:00" — это уже UTC
-            date_str = event.get("Date", "")
-            if not date_str:
-                continue
-            event_dt_utc = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S")
-            event_dt_utc = event_dt_utc.replace(tzinfo=timezone.utc)
-
-            parsed.append({
-                "id": str(event.get("CalendarId", name + date_str)),
-                "name": name,
-                "date_et": event_dt_utc,  # имя поля сохранено для совместимости с остальным кодом, но теперь это уже UTC
-                "forecast": event.get("Forecast") or event.get("TEForecast"),
-                "previous": event.get("Previous"),
-                "impact": event.get("Importance"),
-            })
-        except Exception as exc:
-            print(f"Не удалось разобрать событие {event}: {exc}")
+    for event in KNOWN_EVENTS:
+        event_dt_utc = event["date_utc"]
+        # пропускаем события, которые уже прошли больше суток назад —
+        # не нужно их каждый раз заново парсить и проверять
+        if (now_utc - event_dt_utc).total_seconds() > 86400:
             continue
+        parsed.append({
+            "id": event["id"],
+            "name": event["name"],
+            "date_et": event_dt_utc,  # имя поля сохранено для совместимости, значение в UTC
+            "forecast": event.get("forecast"),
+            "previous": event.get("previous"),
+            "impact": "High",
+        })
 
     return parsed
+
+
+# --- РУЧНОЙ КАЛЕНДАРЬ СОБЫТИЙ ---
+# Обновляется при каждом "обнови дашборд". Дата и время — в UTC.
+# Если событие прошло больше суток назад — само пропустится в коде выше,
+# можно не удалять вручную, но лучше чистить раз в несколько недель.
+KNOWN_EVENTS = [
+    {
+        "id": "2026-06-30-pmi",
+        "name": "PMI производства США (июнь)",
+        "date_utc": datetime(2026, 6, 30, 14, 0, tzinfo=timezone.utc),
+        "forecast": "49.0",
+        "previous": "48.5",
+    },
+    {
+        "id": "2026-07-03-nfp",
+        "name": "Non-Farm Payrolls (июнь)",
+        "date_utc": datetime(2026, 7, 3, 12, 30, tzinfo=timezone.utc),
+        "forecast": "180K",
+        "previous": "199K",
+    },
+    # Добавляй новые события сюда же по тому же образцу.
+]
 
 
 # ============================================================
