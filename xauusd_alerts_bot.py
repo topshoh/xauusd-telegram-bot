@@ -227,14 +227,6 @@ def fetch_calendar_events() -> list[dict]:
 # Если событие прошло больше суток назад — само пропустится в коде выше,
 # можно не удалять вручную, но лучше чистить раз в несколько недель.
 KNOWN_EVENTS = [
-    # --- ВРЕМЕННОЕ ТЕСТОВОЕ СОБЫТИЕ — удалить после проверки! ---
-    {
-        "id": "TEST-2026-06-30-cpi",
-        "name": "TEST CPI m/m (проверка отправки)",
-        "date_utc": datetime(2026, 6, 30, 9, 48, tzinfo=timezone.utc),
-        "forecast": "0.3%",
-        "previous": "0.2%",
-    },
     {
         "id": "2026-06-30-pmi",
         "name": "PMI производства США (июнь)",
@@ -389,11 +381,9 @@ def send_telegram_message(text: str) -> None:
 def main() -> None:
     now_tashkent = datetime.now(TASHKENT_TZ)
 
-    # ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ТЕСТИРОВАНИЯ — вернуть обратно после проверки!
-    # if is_market_closed(now_tashkent):
-    #     print(f"Рынок закрыт (сейчас {now_tashkent.strftime('%A %H:%M')} по Ташкенту). Алерты не отправляются.")
-    #     return
-    print(f"[ТЕСТ] Проверка выходных временно отключена. Сейчас {now_tashkent.strftime('%A %H:%M')} по Ташкенту.")
+    if is_market_closed(now_tashkent):
+        print(f"Рынок закрыт (сейчас {now_tashkent.strftime('%A %H:%M')} по Ташкенту). Алерты не отправляются.")
+        return
 
     state = load_state()
     now_utc = datetime.now(timezone.utc)
