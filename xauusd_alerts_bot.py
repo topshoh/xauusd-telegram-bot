@@ -183,7 +183,7 @@ def fetch_gold_price() -> float | None:
 
 
 # ============================================================
-# Получение календаря событий через JBlanked API
+# Получение календаря событий (ручной список)
 # ============================================================
 
 def fetch_calendar_events() -> list[dict]:
@@ -227,6 +227,14 @@ def fetch_calendar_events() -> list[dict]:
 # Если событие прошло больше суток назад — само пропустится в коде выше,
 # можно не удалять вручную, но лучше чистить раз в несколько недель.
 KNOWN_EVENTS = [
+    # --- ВРЕМЕННОЕ ТЕСТОВОЕ СОБЫТИЕ — удалить после проверки! ---
+    {
+        "id": "TEST-2026-06-30-cpi",
+        "name": "TEST CPI m/m (проверка отправки)",
+        "date_utc": datetime(2026, 6, 30, 9, 48, tzinfo=timezone.utc),
+        "forecast": "0.3%",
+        "previous": "0.2%",
+    },
     {
         "id": "2026-06-30-pmi",
         "name": "PMI производства США (июнь)",
@@ -392,7 +400,7 @@ def main() -> None:
 
     # --- 1. Проверка предстоящих событий ---
     events = fetch_calendar_events()
-    print(f"[ЛОГ] Получено {len(events)} подходящих событий от JBlanked API.")
+    print(f"[ЛОГ] Получено {len(events)} подходящих событий из календаря.")
     for e in events:
         mins = (e["date_et"].astimezone(timezone.utc) - now_utc).total_seconds() / 60
         print(f"  - {e['name']} | через {mins:.0f} мин | прогноз={e.get('forecast')} пред={e.get('previous')}")
