@@ -1,172 +1,77 @@
-"""
-xauusd_telegram_bot.py
-
-Скрипт берёт живую цену золота (gold-api.com) и отправляет короткую
-сводку в Telegram-чат. Предназначен для запуска по расписанию через
-GitHub Actions — то есть работает даже когда твой компьютер выключен
-и дашборд в браузере закрыт.
-
-Что НЕ делает этот скрипт (важно понимать):
-- Не ищет свежие новости/макрофакторы сам — для этого нужен я (Claude) в
-  чате. Этот скрипт отправляет только живую цену + последний срез
-  макро-вывода, который ты вручную обновляешь в этом файле, когда просишь
-  меня "обнови дашборд".
-- Не даёт торговых сигналов и не предсказывает цену — см. WARNING_TEXT ниже.
-"""
-
 import os
 import requests
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-# --- Настройки из переменных окружения (задаются в GitHub Secrets, см. README) ---
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-# --- Часы, когда рынок золота (COMEX/спот) закрыт ---
-# Рынок закрывается в пятницу 17:00 ET и открывается в воскресенье 18:00 ET.
-# В часовом поясе Ташкента (UTC+5) это: закрытие — субботы ~02:00 ночи,
-# открытие — понедельника ~03:00 ночи. Бот не должен слать сообщения в
-# этот промежуток, чтобы не отправлять "сводку" когда торгов физически нет.
 TASHKENT_TZ = ZoneInfo("Asia/Tashkent")
 
-
 def is_market_closed(now_tashkent: datetime) -> bool:
-    """
-    Проверяет, закрыт ли рынок золота прямо сейчас (по времени Ташкента).
-    Закрыт: с субботы 02:00 до понедельника 03:00 включительно.
-    weekday(): понедельник=0, ..., субботы=5, воскресенье=6.
-    """
     weekday = now_tashkent.weekday()
     hour = now_tashkent.hour
-
-    # Субботы 02:00 и позже -> закрыт весь день субботы
-    if weekday == 5 and hour >= 2:
-        return True
-    # Воскресенье -> закрыт весь день
-    if weekday == 6:
-        return True
-    # Понедельник до 03:00 -> ещё закрыт
-    if weekday == 0 and hour < 3:
-        return True
+    if weekday == 5 and hour >= 2: return True
+    if weekday == 6: return True
+    if weekday == 0 and hour < 3: return True
     return False
 
-
-# --- Этот блок обновляешь вручную, когда просишь меня "обнови дашборд" ---
-# Просто попроси меня в чате: "обнови macro_summary для телеграм-бота" —
-# и я перепишу текст ниже под актуальную картину.
 MACRO_SUMMARY = (
-    "Ставка ФРС: ястребиный тон, вероятность повышения в декабре ~80% (давит на золото)\n"
-    "Инфляция (PCE): 4.1%, в рамках ожиданий, 2-й день отскока (поддержало золото)\n"
-    "Доллар (DXY): ослаб от годовых максимумов (поддержало золото)\n"
-    "Геополитика (Иран): инцидент в Ормузском проливе несмотря на перемирие (неопределённость)\n"
-    "Неделя в целом: 4-е подряд недельное снижение (-3%)\n"
-    "Вердикт: боковик, не чёткий long и не чёткий short"
+    "Ставка ФРС / Уорш: инфляция 'too high', но без сигнала по ставке в июле, outlook улучшился (менее ястребиный)\n"
+    "ADP (июнь): +98K — слабо, ниже прогноза 113-118K (поддержало золото)\n"
+    "Инфляция (Nowcast июль): CPI 3.52% / Core 2.81% — разрыв уменьшился\n"
+    "Доллар (DXY): ~101.3, стабильно/слегка слабее\n"
+    "Доходность 10Y: ~4.49% — высокая, продолжает давить\n"
+    "Вердикт: отскок после слабых данных по занятости и нейтрально-мягкой речи Уорша. Ждём NFP. Боковик с краткосрочным bias вверх"
 )
-MACRO_SUMMARY_DATE = "27 июня 2026 (вечер)"
+MACRO_SUMMARY_DATE = "2 июля 2026 (утро)"
 
-WARNING_TEXT = (
-    "Это не торговый сигнал и не прогноз цены — только живые данные и "
-    "контекст для самостоятельного анализа."
-)
+WARNING_TEXT = "Это не торговый сигнал и не прогноз цены — только живые данные и контекст для самостоятельного анализа."
 
-
-def fetch_gold_price() -> float | None:
-    """
-    Получить текущую цену золота. Сначала пробует основной источник
-    (gold-api.com), при сбое — резервный (Yahoo Finance, без API-ключа).
-    Делает до 2 попыток на каждый источник, чтобы единичный сетевой
-    сбой не оставлял сообщение без цены.
-    """
-    # --- Источник 1: gold-api.com ---
+def fetch_gold_price():
     for attempt in range(2):
         try:
-            response = requests.get(
-                "https://api.gold-api.com/price/XAU", timeout=15
-            )
+            response = requests.get("https://api.gold-api.com/price/XAU", timeout=15)
             response.raise_for_status()
             data = response.json()
             price = data.get("price") or data.get("price_usd")
             if price is not None:
                 return float(price)
-            print(f"gold-api.com вернул ответ без цены: {data}")
-        except Exception as exc:
-            print(f"Попытка {attempt + 1}, gold-api.com: {exc}")
-
-    # --- Источник 2 (резервный): Yahoo Finance, фьючерс на золото (GC=F) ---
+        except:
+            pass
     try:
-        response = requests.get(
-            "https://query1.finance.yahoo.com/v8/finance/chart/GC=F",
-            timeout=15,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
+        response = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/GC=F", timeout=15, headers={"User-Agent": "Mozilla/5.0"})
         response.raise_for_status()
         data = response.json()
-        price = (
-            data.get("chart", {})
-            .get("result", [{}])[0]
-            .get("meta", {})
-            .get("regularMarketPrice")
-        )
+        price = data.get("chart", {}).get("result", [{}])[0].get("meta", {}).get("regularMarketPrice")
         if price is not None:
             return float(price)
-        print(f"Yahoo Finance вернул ответ без цены: {data}")
-    except Exception as exc:
-        print(f"Резервный источник (Yahoo Finance) тоже не сработал: {exc}")
-
+    except:
+        pass
     return None
 
-
-def build_message(price: float | None) -> str:
+def build_message(price):
     now = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
-
     if price is None:
-        price_line = (
-            "⚠️ Не удалось получить цену из обоих источников "
-            "(gold-api.com и Yahoo Finance). Проверь цену вручную, "
-            "например на tradingview.com или investing.com."
-        )
+        price_line = "⚠️ Не удалось получить цену. Проверь вручную на tradingview.com"
     else:
         price_line = f"💰 XAU/USD: <b>${price:,.2f}</b>"
-
-    message = (
-        f"<b>XAUUSD — сводка</b>\n"
-        f"{now}\n\n"
-        f"{price_line}\n\n"
-        f"<b>Макро-контекст</b> (срез на {MACRO_SUMMARY_DATE}):\n"
-        f"{MACRO_SUMMARY}\n\n"
-        f"<i>{WARNING_TEXT}</i>"
-    )
+    message = f"<b>XAUUSD — сводка</b>\n{now}\n\n{price_line}\n\n<b>Макро-контекст</b> (срез на {MACRO_SUMMARY_DATE}):\n{MACRO_SUMMARY}\n\n<i>{WARNING_TEXT}</i>"
     return message
 
-
-def send_telegram_message(text: str) -> None:
+def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
-    }
-    response = requests.post(url, json=payload, timeout=10)
-    response.raise_for_status()
-    print("Сообщение отправлено успешно.")
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
+    requests.post(url, json=payload, timeout=10)
 
-
-def main() -> None:
+def main():
     now_tashkent = datetime.now(TASHKENT_TZ)
-
     if is_market_closed(now_tashkent):
-        print(
-            f"Рынок золота закрыт (сейчас {now_tashkent.strftime('%A %H:%M')} "
-            f"по Ташкенту). Сообщение не отправляется."
-        )
+        print("Рынок закрыт. Сообщение не отправляется.")
         return
-
     price = fetch_gold_price()
     message = build_message(price)
     send_telegram_message(message)
-
 
 if __name__ == "__main__":
     main()
