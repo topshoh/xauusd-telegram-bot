@@ -172,6 +172,10 @@ def fetch_nfp_change():
         return None
     latest = float(points[0]["value"])
     prev = float(points[1]["value"])
+    # ВРЕМЕННАЯ ДИАГНОСТИКА — покажет в логе Actions, что реально приходит от BLS
+    print(f"[DEBUG NFP] points[0] = {points[0]}")
+    print(f"[DEBUG NFP] points[1] = {points[1]}")
+    print(f"[DEBUG NFP] latest={latest}, prev={prev}, diff={latest - prev}")
     change_thousands = round((latest - prev) / 1000)  # подтверждено живым тестом 09.07.2026
     period_label = f"{points[0]['periodName']} {points[0]['year']}"
     return change_thousands, period_label
