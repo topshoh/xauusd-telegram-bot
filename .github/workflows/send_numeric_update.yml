@@ -1,0 +1,33 @@
+name: XAUUSD Numeric Bot
+
+on:
+  schedule:
+    # Каждый день в 07:00 UTC (12:00 по Ташкенту) — можно поменять частоту.
+    # Раз в день достаточно: цена и так живая внутри дашборда, а CPI/NFP/PCE/COT
+    # физически не выходят чаще, чем раз в неделю-месяц.
+    - cron: '0 7 * * *'
+  workflow_dispatch: {}   # позволяет запускать вручную кнопкой "Run workflow" на GitHub
+
+jobs:
+  send-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run numeric bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
+        run: python xauusd_numeric_bot.py
