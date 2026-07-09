@@ -171,7 +171,7 @@ def fetch_nfp_change():
         return None
     latest = float(points[0]["value"])
     prev = float(points[1]["value"])
-    change_thousands = round(latest - prev)  # уже в тысячах рабочих мест, доп. умножение не нужно
+    change_thousands = round((latest - prev) * 1000)  # уже в тысячах рабочих мест, доп. умножение не нужно
     period_label = f"{points[0]['periodName']} {points[0]['year']}"
     return change_thousands, period_label
 
