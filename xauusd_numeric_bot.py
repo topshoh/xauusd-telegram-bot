@@ -158,13 +158,20 @@ def fetch_cpi_yoy():
 
 
 def fetch_nfp_change():
-    """NFP — изменение занятости за последний месяц в тысячах."""
+    """NFP — изменение занятости за последний месяц в тысячах.
+
+    ИСПРАВЛЕНО (было баг): BLS-серия CES0000000001 уже приходит в единицах
+    "тысячи человек" (Thousands of Persons). Разница между двумя месяцами
+    УЖЕ выражена в тысячах рабочих мест — умножать на 1000 второй раз
+    было ошибкой (реальные +57K превращались в отображении в "+57,000K",
+    то есть в 57 миллионов — в 1000 раз больше правды). Сейчас просто
+    берём разницу как есть."""
     points = fetch_bls_series("CES0000000001", n_points=2)
     if len(points) < 2:
         return None
     latest = float(points[0]["value"])
     prev = float(points[1]["value"])
-    change_thousands = round((latest - prev) * 1000)  # BLS отдаёт в тысячах занятых, шкала своя — проверить при первом запуске!
+    change_thousands = round(latest - prev)  # уже в тысячах рабочих мест, доп. умножение не нужно
     period_label = f"{points[0]['periodName']} {points[0]['year']}"
     return change_thousands, period_label
 
@@ -172,7 +179,14 @@ def fetch_nfp_change():
 # ============================================================
 # 4. PCE (BEA — Bureau of Economic Analysis, официальный API)
 # ============================================================
-def fetch_pce_latest():
+def fetch_pce_yoy():
+    """PCE год к году. Таблица T20804 отдаёт уровень индекса цен (не готовый
+    %), поэтому берём точку сейчас и точку 12 месяцев назад и считаем %
+    сами — тем же способом, что и для CPI выше. LineNumber="1" — это
+    headline PCE (расходы в целом, не Core). ВАЖНО: как и с NFP, я не смог
+    протестировать это вживую без вашего реального BEA-ключа — при первом
+    запуске сверьте результат с официальной цифрой (например, с сайта
+    bea.gov) и напишите мне, если разойдётся."""
     if not BEA_API_KEY:
         print("[WARN] BEA_API_KEY не задан, пропускаю PCE")
         return None
@@ -181,9 +195,10 @@ def fetch_pce_latest():
         "UserID": BEA_API_KEY,
         "method": "GetData",
         "datasetname": "NIPA",
-        "TableName": "T20804",  # Personal Consumption Expenditures Price Index, % change
+        "TableName": "T20804",
+        "LineNumber": "1",
         "Frequency": "M",
-        "Year": "X",  # X = все доступные годы
+        "Year": "X",
         "ResultFormat": "JSON",
     }
     try:
@@ -192,7 +207,13 @@ def fetch_pce_latest():
         data = r.json()
         rows = data["BEAAPI"]["Results"]["Data"]
         rows_sorted = sorted(rows, key=lambda x: x["TimePeriod"], reverse=True)
-        return rows_sorted[0] if rows_sorted else None
+        if len(rows_sorted) < 13:
+            return None
+        latest_val = float(rows_sorted[0]["DataValue"].replace(",", ""))
+        year_ago_val = float(rows_sorted[12]["DataValue"].replace(",", ""))
+        yoy = (latest_val - year_ago_val) / year_ago_val * 100
+        period_label = rows_sorted[0]["TimePeriod"]
+        return round(yoy, 2), period_label
     except Exception as e:
         print(f"[WARN] Не удалось получить PCE из BEA: {e}")
         return None
@@ -249,9 +270,9 @@ def build_message():
         lines.append(f"👷 Занятость, изменение за месяц: <b>{nfp[0]:+,}K</b> ({nfp[1]}, BLS)")
 
     # PCE
-    pce = fetch_pce_latest()
+    pce = fetch_pce_yoy()
     if pce:
-        lines.append(f"🧾 PCE (последняя точка BEA): <b>{pce.get('DataValue')}</b> ({pce.get('TimePeriod')})")
+        lines.append(f"🧾 PCE г/г (headline): <b>{pce[0]}%</b> ({pce[1]}, BEA)")
 
     # COT
     cot = fetch_cot_gold()
