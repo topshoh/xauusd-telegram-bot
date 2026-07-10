@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XAUUSD Macro Dashboard — простыми словами</title>
+<style>
+  :root {
+    --bg: #0d0f12;
+    --card: #161a1f;
+    --card-border: #262b33;
+    --text: #e8eaed;
+    --text-dim: #8b929c;
+    --text-faint: #5a6068;
+    --accent-gold: #d4af37;
+    --green: #3ecf8e;
+    --red: #e2574c;
+    --amber: #e8a23c;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { color: var(--text-dim); font-size: 13px; margin: 0 0 24px; }
+  .top-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .price-card { display: flex; flex-direction: column; justify-content: center; }
+  .price-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .price-value { font-size: 32px; font-weight: 600; color: var(--accent-gold); font-variant-numeric: tabular-nums; }
+  .price-change { font-size: 13px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .price-meta { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
+  .mini-card { display: flex; flex-direction: column; justify-content: center; }
+  .mini-label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .mini-value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-bearish { background: rgba(226,87,76,0.15); color: var(--red); }
+  .badge-bullish { background: rgba(62,207,142,0.15); color: var(--green); }
+  .badge-neutral { background: rgba(232,162,60,0.15); color: var(--amber); }
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #d4af37;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 32px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #d4af37;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+  th { color: var(--text-dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  td.factor { font-weight: 500; min-width: 140px; }
+  td.direction { white-space: nowrap; }
+  td.simple { font-size: 13px; line-height: 1.55; color: #c5c9d1; }
+  td.simple strong { color: var(--text); }
+  td.verdict { font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .verdict-bearish { color: var(--red); }
+  .verdict-bullish { color: var(--green); }
+  .events-table td.date { color: var(--text-dim); font-size: 13px; white-space: nowrap; min-width: 90px; }
+  .events-table td.event { font-weight: 500; }
+  .events-table td.impact { white-space: nowrap; }
+  .impact-high { color: var(--red); font-weight: 600; }
+  .impact-medium { color: var(--amber); font-weight: 600; }
+  .footer-note {
+    margin-top: 28px;
+    padding: 14px 16px;
+    background: rgba(232,162,60,0.08);
+    border: 1px solid rgba(232,162,60,0.25);
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .footer-note strong { color: var(--amber); }
+  .refresh-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .refresh-btn, .nav-link-btn {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .refresh-btn:hover, .nav-link-btn:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
+  .data-source { font-size: 11px; color: var(--text-faint); }
+  .nav-row { display: flex; gap: 8px; }
+  .verdict-box {
+    background: #1a1f26;
+    border: 2px solid #d4af37;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 20px 0;
+  }
+  .verdict-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #d4af37;
+    margin-bottom: 12px;
+  }
+  .verdict-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #c5c9d1;
+  }
+  .verdict-text strong { color: #e8eaed; }
+  .verdict-summary {
+    margin-top: 16px;
+    padding: 14px 18px;
+    background: rgba(226,87,76,0.12);
+    border-left: 5px solid #e2574c;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .verdict-summary.bullish {
+    background: rgba(62,207,142,0.12);
+    border-left-color: #3ecf8e;
+  }
+  .cot-table td.cot-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cot-table th.cot-num { text-align: right; }
+  .cot-verdict-green { color: var(--green); font-weight: 600; }
+  .cot-verdict-red { color: var(--red); font-weight: 600; }
+  .cot-source-note {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .learn-box {
+    background: #14181d;
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 4px 18px 4px;
+    margin-bottom: 18px;
+  }
+  .learn-box summary {
+    cursor: pointer;
+    padding: 14px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent-gold);
+    list-style: none;
+  }
+  .learn-box summary::-webkit-details-marker { display: none; }
+  .learn-box summary::before {
+    content: "▸ ";
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+  .learn-box[open] summary::before { transform: rotate(90deg); }
+  .learn-step {
+    border-top: 1px solid var(--card-border);
+    padding: 14px 0;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #c5c9d1;
+  }
+  .learn-step:last-child { padding-bottom: 18px; }
+  .learn-step-title {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    font-size: 13.5px;
+  }
+  .learn-step .who { color: var(--accent-gold); font-weight: 600; }
+  @media (max-width: 700px) {
+    .top-row { grid-template-columns: 1fr; }
+  }
+
+  /* ===== НОВЫЕ СТИЛИ ДЛЯ ОБУЧАЮЩЕГО БЛОКА (добавлено по запросу) ===== */
+  .learn-master { border: 2px solid #d4af37; border-radius: 12px; padding: 20px; background: #1a1a1a; }
+  .learn-master h2 { color: #d4af37; }
+  .learn-intro { background: #262626; padding: 15px; border-radius: 8px; line-height: 1.6; }
+  .learn-formula { background: #0d2818; border-left: 4px solid #4caf50; padding: 15px; margin: 12px 0; border-radius: 6px; line-height: 1.8; font-size: 1.05em; }
+  .learn-step-key { background: #2d2410; border-left: 4px solid #ff9800; padding: 12px; border-radius: 6px; }
+  .learn-warning { background: #2d1414; border-left: 4px solid #f44336; padding: 15px; border-radius: 8px; line-height: 1.6; margin-top: 15px; }
+  .learn-note { background: #262626; padding: 10px; border-radius: 6px; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>XAUUSD — макро-дашборд (простыми словами)</h1>
+<p class="subtitle">Живая цена золота + объяснение каждого термина на пальцах + общий вердикт. Каждая строка: оригинал → простое объяснение → вывод.</p>
+<p style="margin:-8px 0 16px; font-size:14px; color:#d4af37; font-weight:600; background:#1a1f26; padding:8px 14px; border-radius:8px; border-left:4px solid #d4af37;">
+  📅 Последнее полное обновление дашборда: <strong>6 июля 2026, вечер</strong><br>
+  <span style="font-size:12px; color:#c5c9d1;">• Живая цена — всегда свежая (обновляется автоматически)<br>
+  • Макро-данные, COT, nowcast, календарь — на момент последнего обновления (смотри пометки в блоках)<br>
+  • Чтобы обновить всё — напиши «обнови dashboard»</span>
+</p>
+<div style="position:sticky; top:0; z-index:100; background:#0f1318; border-bottom:2px solid #d4af37; padding:8px 10px; margin:0 0 16px; display:flex; gap:8px; flex-wrap:wrap; font-size:12px;">
+  <a href="#levels-risks" style="background:#1a1f26; color:#d4af37; padding:5px 10px; border-radius:6px; text-decoration:none; font-weight:600; border:1px solid #3a414d;">🎯 Уровни и риски</a>
+  <a href="#" onclick="document.querySelector('summary.section-title').closest('details').scrollIntoView(); return false;" style="background:#1a1f26; color:#c5c9d1; padding:5px 10px; border-radius:6px; text-decoration:none; border:1px solid #3a414d;">📊 Счёт факторов</a>
+  <a href="#factor-fed" style="background:#1a1f26; color:#c5c9d1; padding:5px 10px; border-radius:6px; text-decoration:none; border:1px solid #3a414d;">📋 Все факторы</a>
+</div>
+<div class="top-row">
+  <div class="card price-card">
+    <div class="price-label">Цена XAU/USD (живая)</div>
+    <div class="price-value" id="livePrice">—</div>
+    <div class="price-change" id="liveChange">загрузка...</div>
+    <div class="price-meta" id="liveTimestamp">источник: gold-api.com</div>
+  </div>
+  <div class="card mini-card">
+    <div class="mini-label">Текущий доминирующий фактор <span style="font-size:9px; color:#8b929c;">(данные на 6 июля 2026 20:15:00)</span></div>
+    <div class="mini-value" style="font-size:12px; line-height:1.3;">PCE спокойный = инфляция не растёт быстрее, чем ждали</div>
+    <div style="margin-top:3px; font-size:10.5px; color:#c5c9d1;">Уже несколько дней подряд → меньше шансов, что ФРС будет резко повышать ставку</div>
+    <div style="margin-top:4px; font-size:11px; color:#8b929c;">→ Пока позитив для золота</div>
+    <span class="badge badge-bullish" style="margin-top:6px;">небольшой отскок</span>
+  </div>
+  <div class="card mini-card">
+    <div class="mini-label">Неделя в целом <span style="font-size:9px; color:#8b929c;">(данные на 6 июля 2026 20:15:00)</span></div>
+    <div class="mini-value" style="font-size:13px; line-height:1.3;">Отскок +2% за неделю</div>
+    <div style="margin-top:3px; font-size:11px; color:#c5c9d1;">неделя 29 июня — 3 июля: серия из 4 недель падения прервана (Trading Economics)</div>
+    <div style="margin-top:4px; font-size:11px; color:#8b929c;">→ краткосрочно отскок, но месяц в целом всё ещё в минусе (~ -6.8%)</div>
+    <span class="badge badge-bullish" style="margin-top:6px;">на слабом NFP</span>
+  </div>
+</div>
+
+<!-- ================= СЧЁТ ФАКТОРОВ: БЫЧЬИ vs МЕДВЕЖЬИ ================= -->
+<details open>
+  <summary class="section-title">Счёт факторов: Бычьи vs Медвежьи для золота <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+
+  <p style="font-size:12px; color:var(--text-dim); line-height:1.6; background:#1f252e; border:1px solid #3a414d; border-radius:8px; padding:10px 12px; margin-bottom:14px;">
+    <strong>Как это посчитано:</strong> взял все факторы из этого дашборда и посчитал, сколько тянет золото вверх, сколько вниз. Один явно медвежий или бычий фактор = 1 голос. Нейтральные и «не определено» факторы в счёт не идут. Раньше здесь был один общий счёт — это была методологическая ошибка: разовый отчёт NFP (краткосрочный сигнал) считался наравне со ставкой ФРС (структурный тренд на годы). Теперь счёт разделён на <strong>краткосрочный</strong> (недели) и <strong>структурный</strong> (месяцы-годы) — они часто тянут в разные стороны, и это важно видеть отдельно, а не смешивать в одну цифру. Кликните на фактор, чтобы посмотреть детали и источник ниже.
+  </p>
+
+  <!-- КРАТКОСРОЧНЫЙ СЧЁТ -->
+  <div style="font-weight:700; color:#d4af37; margin:16px 0 8px; font-size:13px;">Краткосрочный счёт (данные недель, могут развернуться быстро)</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+    <div style="background:rgba(62,207,142,0.1); border:1px solid rgba(62,207,142,0.4); border-radius:10px; padding:10px; text-align:center;">
+      <div style="font-size:22px; font-weight:800; color:#3ecf8e;">2</div>
+      <div style="font-size:11px; color:#3ecf8e; font-weight:600;">БЫЧЬИХ</div>
+    </div>
+    <div style="background:rgba(226,87,76,0.1); border:1px solid rgba(226,87,76,0.4); border-radius:10px; padding:10px; text-align:center;">
+      <div style="font-size:22px; font-weight:800; color:#e2574c;">1</div>
+      <div style="font-size:11px; color:#e2574c; font-weight:600;">МЕДВЕЖЬИХ</div>
+    </div>
+    <div style="background:rgba(139,146,156,0.1); border:1px solid rgba(139,146,156,0.4); border-radius:10px; padding:10px; text-align:center;">
+      <div style="font-size:22px; font-weight:800; color:#8b929c;">4</div>
+      <div style="font-size:11px; color:#8b929c; font-weight:600;">НЕЙТРАЛЬНЫХ</div>
+    </div>
+  </div>
+  <table style="width:100%; border-collapse: collapse; font-size:13px; margin-bottom:16px;">
+    <tbody>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038;"><a href="#factor-nfp" style="color:inherit; text-decoration:underline dotted;">Занятость / NFP</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-bullish">+ бычий</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px;">57K факт против 110K прогноза — на 48% хуже ожиданий (BLS)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038;"><a href="#factor-cot" style="color:inherit; text-decoration:underline dotted;">Позиционирование COT</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-bullish">+ бычий</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px;">Банки держат экстремальный шорт → риск short squeeze вверх (CFTC)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038;"><a href="#factor-etf" style="color:inherit; text-decoration:underline dotted;">ETF-потоки (GLD)</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-bearish">− медвежий</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px;">Чистый отток ~6 тонн за день (25 июня, данные требуют обновления)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; color:#8b929c;"><a href="#factor-inflation" style="color:inherit; text-decoration:underline dotted;">Инфляция (PCE)</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-neutral">○ нейтрально</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px; color:#8b929c;">Вышло точно по прогнозу — сюрприза нет (BEA)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; color:#8b929c;"><a href="#factor-dxy" style="color:inherit; text-decoration:underline dotted;">Индекс доллара (DXY)</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-neutral">○ нейтрально</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px; color:#8b929c;">Краткосрочно слабеет, но 84-й процентиль своего годового диапазона (Yahoo Finance)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; color:#8b929c;"><a href="#factor-geo" style="color:inherit; text-decoration:underline dotted;">Геополитика (Иран)</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-neutral">○ нейтрально</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px; color:#8b929c;">Ни явной эскалации, ни разрядки (Bloomberg)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; color:#8b929c;"><a href="#factor-tech" style="color:inherit; text-decoration:underline dotted;">Техническая структура</a></td>
+        <td style="padding:6px 10px; text-align:center;"><span class="badge badge-neutral">○ не определено</span></td>
+        <td style="padding:6px 10px; font-size:12px; color:#8b929c;">Субъективное чтение графика, не факт с источником</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- СТРУКТУРНЫЙ СЧЁТ -->
+  <div style="font-weight:700; color:#d4af37; margin:16px 0 8px; font-size:13px;">Структурный счёт (тренды на месяцы-годы, медленно разворачиваются)</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+    <div style="background:rgba(62,207,142,0.1); border:1px solid rgba(62,207,142,0.4); border-radius:10px; padding:10px; text-align:center;">
+      <div style="font-size:22px; font-weight:800; color:#3ecf8e;">1</div>
+      <div style="font-size:11px; color:#3ecf8e; font-weight:600;">БЫЧИЙ</div>
+    </div>
+    <div style="background:rgba(226,87,76,0.1); border:1px solid rgba(226,87,76,0.4); border-radius:10px; padding:10px; text-align:center;">
+      <div style="font-size:22px; font-weight:800; color:#e2574c;">2</div>
+      <div style="font-size:11px; color:#e2574c; font-weight:600;">МЕДВЕЖЬИХ</div>
+    </div>
+    <div style="background:rgba(139,146,156,0.1); border:1px solid rgba(139,146,156,0.4); border-radius:10px; padding:10px; text-align:center;">
+      <div style="font-size:22px; font-weight:800; color:#8b929c;">0</div>
+      <div style="font-size:11px; color:#8b929c; font-weight:600;">НЕЙТРАЛЬНЫХ</div>
+    </div>
+  </div>
+  <table style="width:100%; border-collapse: collapse; font-size:13px; margin-bottom:16px;">
+    <tbody>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038;"><a href="#factor-cb" style="color:inherit; text-decoration:underline dotted;">Спрос центробанков</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-bullish">+ бычий</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px;">1,313 тонн за квартал — исторический рекорд (World Gold Council)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038;"><a href="#factor-fed" style="color:inherit; text-decoration:underline dotted;">Ставка ФРС</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-bearish">− медвежий</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px;">Июньский dot plot ФРС сдвинулся к хайку — рынок ждёт ужесточения, а не смягчения (CME FedWatch)</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038;"><a href="#factor-yield" style="color:inherit; text-decoration:underline dotted;">Реальная доходность (TIPS)</a></td>
+        <td style="padding:6px 10px; text-align:center; border-bottom:1px solid #2a3038;"><span class="badge badge-bearish">− медвежий</span></td>
+        <td style="padding:6px 10px; border-bottom:1px solid #2a3038; font-size:12px;">2.25%, растёт весь год (Trading Economics, FRED)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="background:#1a1f26; border:2px solid #d4af37; border-radius:10px; padding:14px 16px;">
+    <div style="font-weight:700; color:#d4af37; margin-bottom:6px; font-size:14px;">Итог: краткосрочно +1 в пользу быков, структурно −1 в пользу медведей → в сумме 0, баланс</div>
+    <div style="font-size:13px; color:#c5c9d1; line-height:1.6;">
+      Это самое честное, что можно сказать по имеющимся данным: <strong>прямо сейчас рынок реагирует позитивно</strong> (слабый NFP, риск short squeeze у банков), <strong>но структурный фон против золота не изменился</strong> (растущая реальная доходность, рынок фьючерсов закладывает более высокую ставку к концу года) — и уравновешивается только спросом центробанков. Отток из ETF (GLD) — тревожный звоночек, но по одному дню данных выводов не делают. Итоговый счёт 3 бычьих / 3 медвежьих / 4 нейтральных из 10 факторов — не сигнал ни на покупку, ни на продажу, а картина реального на сегодня противостояния сил.
+    </div>
+  </div>
+</details>
+
+<!-- ================= КЛЮЧЕВЫЕ УРОВНИ И РИСКИ ================= -->
+<details open id="levels-risks">
+  <summary class="section-title">🎯 Ключевые уровни и риски (простыми словами) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+<div style="background:#1a1f26; border:2px solid #d4af37; border-radius:12px; padding:18px 22px; margin-bottom:20px;">
+
+  <p style="font-size:12px; color:var(--text-dim); line-height:1.6; background:#14181e; border:1px solid #3a414d; border-radius:8px; padding:10px 12px; margin-bottom:16px;">
+    <strong>Важно понимать про этот раздел:</strong> в отличие от макро-данных (ставка, инфляция, доходность) у уровней поддержки/сопротивления <strong>нет единственно верного значения</strong> — это не факт, а интерпретация графика, и разные аналитики чертят разные линии. Раньше здесь стояли конкретные числа без указания, откуда они взялись — это была та же ошибка, что и с процентами факторов. Исправляю: показываю разброс мнений нескольких реальных источников на 5-6 июля, а не выдаю один "точный" уровень.
+  </p>
+
+  <div id="live-price-distance" style="background:#14181e; border:1px solid #3a414d; border-radius:8px; padding:10px 12px; margin-bottom:16px; font-size:13px;">
+    Загружаю текущую цену для расчёта расстояния до уровней…
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+    <div>
+      <div style="font-weight:600; color:#d4af37; margin-bottom:8px;">📉 Поддержки (куда может упасть)</div>
+      <ul style="margin:0; padding-left:18px; font-size:14px; line-height:1.7;">
+        <li><strong>~4,144–4,150</strong> — ближайшая, по внутридневному сетапу (TradingView/OANDA, 5 июля): пробой вниз = сигнал на продажу</li>
+        <li><strong>~4,059–4,060</strong> — следующая, совпадает у двух источников (LiteFinance, TradingView SMC-анализ, 5-6 июля)</li>
+        <li><strong>~3,960–3,963</strong> — сильная зона, тестировалась 3 раза подряд (Intellectia, OANDA, 4-5 июля) — самая "согласованная" поддержка среди источников</li>
+      </ul>
+    </div>
+    <div>
+      <div style="font-weight:600; color:#3ecf8e; margin-bottom:8px;">📈 Сопротивления (куда может вырасти)</div>
+      <ul style="margin:0; padding-left:18px; font-size:14px; line-height:1.7;">
+        <li><strong>~4,195–4,202</strong> — ближайшее, пробой вверх = сигнал на покупку (TradingView/OANDA, LiteFinance)</li>
+        <li><strong>~4,250–4,313</strong> — следующая зона при продолжении роста (LiteFinance, TradingView SMC)</li>
+        <li><strong>~4,300</strong> — более консервативная оценка сопротивления (Intellectia)</li>
+      </ul>
+    </div>
+  </div>
+
+  <p style="font-size:11px; color:#8b929c; margin-top:10px;">
+    <strong>Источники (проверьте сами и сравните с моей выжимкой):</strong> <a href="https://www.barchart.com/forex/quotes/%5EXAUUSD/cheat-sheet" target="_blank" rel="noopener">Barchart — Trader's Cheat Sheet</a> (живой расчёт пивотов, обновляется каждую сессию — самый объективный вариант, так как считается по формуле, а не "на глаз") · <a href="https://www.tradingview.com/symbols/XAUUSD/ideas/" target="_blank" rel="noopener">TradingView — свежие идеи по XAUUSD</a> · <a href="https://www.litefinance.org/blog/analysts-opinions/gold-price-prediction-forecast/daily-and-weekly/" target="_blank" rel="noopener">LiteFinance — дневной технический разбор</a>
+  </p>
+
+  <div style="margin-top:16px; padding-top:14px; border-top:1px solid #262b33;">
+    <div style="font-weight:600; color:#e8a23c; margin-bottom:8px;">⚠️ Что может перевернуть картину (риски)</div>
+    <ul style="margin:0; padding-left:18px; font-size:14px; line-height:1.65; color:#c5c9d1;">
+      <li><strong>14 июля — CPI за июнь:</strong> сюрприз в любую сторону сдвинет ожидания по ставке сильнее всего до конца месяца.</li>
+      <li><strong>28-29 июля — FOMC:</strong> тон Уорша на пресс-конференции важнее самого решения (пауза почти гарантирована).</li>
+      <li><strong>30 июля — PCE за июнь:</strong> главный ориентир ФРС по инфляции.</li>
+      <li><strong>Резкое укрепление доллара (DXY выше 102):</strong> классический негатив для золота — сейчас DXY около 100.8.</li>
+      <li><strong>Снижение геополитической напряжённости</strong> (прогресс на переговорах США-Иран) — убирает страховой спрос на золото.</li>
+      <li><strong>Закрытие шортов банками (short squeeze)</strong> — по данным COT банки держат экстремальный шорт; резкое закрытие может дать рывок вверх против ожиданий.</li>
+    </ul>
+  </div>
+
+  <p style="margin-top:12px; font-size:12px; color:#8b929c;">Это разбор мнений разных источников на конкретную дату, а не мой личный прогноз и не рекомендация. Технический анализ по своей природе субъективен — используйте как один из инструментов, а не как единственный ориентир.</p>
+</div>
+</details>
+
+<!-- ================= КЛЮЧЕВЫЕ СОБЫТИЯ С ПРОГНОЗ / ФАКТ ================= -->
+<details open>
+  <summary class="section-title">Ключевые события (Прогноз / Факт / Предыдущее) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+
+  <table style="width:100%; border-collapse: collapse; margin-bottom: 16px; font-size:13px;">
+    <thead>
+      <tr style="background:#1f252e;">
+        <th style="padding:8px 10px; text-align:left; border-bottom:1px solid #3a414d;">Дата</th>
+        <th style="padding:8px 10px; text-align:left; border-bottom:1px solid #3a414d;">Событие</th>
+        <th style="padding:8px 10px; text-align:center; border-bottom:1px solid #3a414d;">Прогноз</th>
+        <th style="padding:8px 10px; text-align:center; border-bottom:1px solid #3a414d;">Фактическое</th>
+        <th style="padding:8px 10px; text-align:center; border-bottom:1px solid #3a414d;">Предыдущее</th>
+        <th style="padding:8px 10px; text-align:left; border-bottom:1px solid #3a414d;">Влияние на золото</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;">17 июня</td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;"><strong>FOMC + Пресс-конференция</strong></td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">3.75%</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">3.75%</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">3.75%</td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038; font-size:12px;">Нейтрально (ставку не изменили)</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;">2 июля</td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;"><strong>NFP (рабочие места)</strong></td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">110K</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038; color:#3ecf8e; font-weight:600;">57K</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">139K</td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038; font-size:12px; color:#3ecf8e;">Сильно бычье (данные слабые)</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;">14 июля <span style="display:inline-block; margin-left:4px; font-size:10px; background:rgba(212,175,55,0.2); color:#d4af37; padding:2px 6px; border-radius:6px; font-weight:600;">🔔 прислать после этой даты</span></td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;"><strong>CPI за июнь</strong></td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">—</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">ожидается</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">CPI-U г/г 4.2% (май)</td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038; font-size:12px;">Впереди — следите за сюрпризом</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;">28–29 июля <span style="display:inline-block; margin-left:4px; font-size:10px; background:rgba(212,175,55,0.2); color:#d4af37; padding:2px 6px; border-radius:6px; font-weight:600;">🔔 прислать после этой даты</span></td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038;"><strong>FOMC + Пресс-конференция</strong></td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">без изменений (75.6%)</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">ожидается</td>
+        <td style="padding:8px 10px; text-align:center; border-bottom:1px solid #2a3038;">3.75%</td>
+        <td style="padding:8px 10px; border-bottom:1px solid #2a3038; font-size:12px;">Пауза почти гарантирована — важнее тон Уорша на пресс-конференции</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 10px;">30 июля <span style="display:inline-block; margin-left:4px; font-size:10px; background:rgba(212,175,55,0.2); color:#d4af37; padding:2px 6px; border-radius:6px; font-weight:600;">🔔 прислать после этой даты</span></td>
+        <td style="padding:8px 10px;"><strong>PCE / Core PCE за июнь</strong></td>
+        <td style="padding:8px 10px; text-align:center;">—</td>
+        <td style="padding:8px 10px; text-align:center;">ожидается</td>
+        <td style="padding:8px 10px; text-align:center;">Core 3.4%, общий 4.1% (май)</td>
+        <td style="padding:8px 10px; font-size:12px;">Самое важное событие месяца для ФРС</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="font-size:12px; color:#8b929c; margin-top:8px;">
+    <strong>Как читать:</strong> Если Фактическое сильно отличается от Прогноза — это сюрприз. 
+    Зелёный = хорошо для золота (слабые данные), Красный = плохо для золота (сильные данные).<br>
+    <strong>Источники дат:</strong> <a href="https://www.bls.gov/schedule/news_release/cpi.htm" target="_blank" rel="noopener">BLS — расписание CPI</a> (14 июля подтверждено) · <a href="https://www.bea.gov/news/schedule" target="_blank" rel="noopener">BEA — расписание релизов</a> (30 июля подтверждено) · <a href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener">ФРС — календарь FOMC</a> (28–29 июля)
+  </p>
+</details>
+
+<!-- ================= 3 ГЛАВНЫХ ЧИСЛА КАЖДОЕ УТРО ================= -->
+<div style="background:#1a1f26; border:2px solid #d4af37; border-radius:12px; padding:18px 22px; margin:16px 0;">
+  <div style="font-weight:700; color:#d4af37; margin-bottom:12px; font-size:15px;">
+    3 ГЛАВНЫХ ЧИСЛА КАЖДОЕ УТРО <span style="font-size:10px; color:#8b929c;">(данные на 6 июля 2026 20:15:00)</span>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; font-size:13px;">
+    
+    <!-- 1. DXY -->
+    <div>
+      <div style="font-weight:600; margin-bottom:4px;">① Доллар (DXY)</div>
+      <div style="font-size:15px; font-weight:700;">~100.8 <span style="color:#3ecf8e; font-size:13px;">↓ слабее</span></div>
+      <div style="font-size:11px; margin-top:4px;">
+        <span style="color:#3ecf8e;">Хорошо:</span> слабеет → золото растёт<br>
+        <span style="color:#e2574c;">Плохо:</span> укрепляется → золото падает
+      </div>
+      <div style="font-size:10px; margin-top:6px;"><a href="https://finance.yahoo.com/quote/DX-Y.NYB/" target="_blank" rel="noopener" style="color:#6b93d6;">проверить на Yahoo Finance →</a></div>
+    </div>
+
+    <!-- 2. Доходность 10Y -->
+    <div>
+      <div style="font-weight:600; margin-bottom:4px;">② Доходность 10Y</div>
+      <div style="font-size:15px; font-weight:700;">~4.46–4.48% <span style="color:#e2574c; font-size:13px;">↑ высокая</span></div>
+      <div style="font-size:11px; margin-top:4px;">
+        <span style="color:#3ecf8e;">Хорошо:</span> падает → золото растёт<br>
+        <span style="color:#e2574c;">Плохо:</span> растёт → золото падает
+      </div>
+      <div style="font-size:10px; margin-top:6px;"><a href="https://www.yieldcurve.pro/yields/10-year" target="_blank" rel="noopener" style="color:#6b93d6;">проверить на yieldcurve.pro →</a></div>
+    </div>
+
+    <!-- 3. Nowcast разрыв -->
+    <div>
+      <div style="font-weight:600; margin-bottom:4px;">③ Nowcast инфляции</div>
+      <div style="font-size:15px; font-weight:700;">Разрыв CPI / Core ~1.1%</div>
+      <div style="font-size:11px; margin-top:4px;">
+        <span style="color:#3ecf8e;">Хорошо:</span> разрыв уменьшается<br>
+        <span style="color:#e2574c;">Плохо:</span> разрыв сильно растёт (общая инфляция)
+      </div>
+      <div style="font-size:10px; margin-top:6px;"><a href="https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting" target="_blank" rel="noopener" style="color:#6b93d6;">проверить на Cleveland Fed →</a></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================= ОРИЕНТИРЫ (ЗАПОМНИ) ================= -->
+<div style="background:#161a1f; border:1px solid #3a414d; border-radius:10px; padding:14px 18px; margin:12px 0; font-size:12.5px;">
+  <div style="font-weight:600; color:#d4af37; margin-bottom:8px;">Ориентиры (когда хорошо / плохо для золота)</div>
+  
+  <table style="width:100%; border-collapse: collapse; font-size:12px;">
+    <thead>
+      <tr style="background:#1f252e;">
+        <th style="padding:6px 8px; text-align:left; border-bottom:1px solid #3a414d;">Показатель</th>
+        <th style="padding:6px 8px; text-align:center; border-bottom:1px solid #3a414d; color:#3ecf8e;">Хорошо для золота</th>
+        <th style="padding:6px 8px; text-align:center; border-bottom:1px solid #3a414d; color:#e2574c;">Плохо для золота</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:6px 8px; border-bottom:1px solid #2a3038;"><strong>DXY</strong></td>
+        <td style="padding:6px 8px; text-align:center; border-bottom:1px solid #2a3038; color:#3ecf8e;">Ниже 100.5 – 101</td>
+        <td style="padding:6px 8px; text-align:center; border-bottom:1px solid #2a3038; color:#e2574c;">Выше 102 – 102.5</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 8px; border-bottom:1px solid #2a3038;"><strong>Доходность 10Y</strong></td>
+        <td style="padding:6px 8px; text-align:center; border-bottom:1px solid #2a3038; color:#3ecf8e;">Ниже 4.2%</td>
+        <td style="padding:6px 8px; text-align:center; border-bottom:1px solid #2a3038; color:#e2574c;">Выше 4.6 – 4.7%</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 8px;"><strong>Разрыв CPI / Core</strong></td>
+        <td style="padding:6px 8px; text-align:center; color:#3ecf8e;">Ниже 1.0%</td>
+        <td style="padding:6px 8px; text-align:center; color:#e2574c;">Выше 1.5%</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="refresh-row">
+  <span class="data-source">Цена обновляется автоматически каждый час из gold-api.com. Макро-данные — срез на 3 июля 2026 (вечер), обновляются только по запросу в чате.</span>
+  <div class="nav-row">
+    <button class="refresh-btn" onclick="fetchPrice()">Обновить цену</button>
+  </div>
+</div>
+<details open>
+  <summary class="section-title">Факторы и их влияние — с простым объяснением <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+
+  <p style="font-size:12px; color:var(--text-dim); line-height:1.6; background:#1f252e; border:1px solid #3a414d; border-radius:8px; padding:10px 12px; margin-bottom:14px;">
+    <strong>Как читать колонку «Оценка»:</strong> раньше здесь стояли проценты вида «65% медвежий» — они ничего не считали, это было субъективное мнение, переодетое в цифру. Убрал это. Теперь в колонке — либо реальное наблюдаемое число с прямой ссылкой на источник (проверьте сами), либо честная качественная метка без %, если объективного числа для этого фактора не существует (тон ФРС, геополитика, техника — это интерпретация, а не измерение).
+  </p>
+
+  <details class="learn-box">
+  <summary>Как эти факторы вообще работают — общая механика (открой один раз и разберись навсегда)</summary>
+  <div class="learn-step">
+    <div class="learn-step-title">Главное правило: золото не платит проценты</div>
+    Это ключ почти ко всем факторам ниже. Если ты держишь доллары на депозите или облигации — тебе платят процент просто за то, что деньги лежат. Если ты держишь золото — оно может вырасти в цене, но само по себе не платит ничего.<br><br>
+    Из этого правила вытекает вся логика: <strong>всё, что делает "держать доллары/облигации" выгоднее — давит на золото вниз. Всё, что делает доллары менее привлекательными — толкает золото вверх.</strong>
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Ставка ФРС (Federal Funds Rate)</div>
+    <strong>Перевод названия:</strong> "Ставка федеральных фондов" — ставка Федеральной резервной системы США.<br><br>
+    <strong>Откуда взялась цифра и что она значит:</strong> Сейчас ставка держится на уровне 3.50–3.75%. По данным CME FedWatch на 4 июля, вероятность того, что 29 июля ставку не тронут, — 75.6%. При этом фьючерсный рынок (StreetStats, 2 июля) закладывает рост эффективной ставки к ~3.8% к октябрю и ближе к 4% к концу года — то есть на годовом горизонте рынок скорее ждёт ужесточения, чем смягчения, хотя после слабого NFP краткосрочные ожидания повышения в сентябре снизились примерно с 64% до 50% (Trading Economics, 2 июля). Ссылки: <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener">CME FedWatch</a>, <a href="https://streetstats.finance/rates/fedfunds" target="_blank" rel="noopener">StreetStats</a>.<br><br>
+    <strong>Кто считает и как:</strong> Решение принимает комитет ФРС — FOMC (Federal Open Market Committee, "Федеральный комитет по открытым рынкам"), который собирается 8 раз в год и голосует. Это не абстрактное число — физически это ставка, по которой банки одалживают друг другу деньги на одну ночь, чтобы закрыть свои обязательные резервы к концу дня. ФРС не приказывает банкам напрямую — она устанавливает целевой диапазон и воздействует на систему через операции на открытом рынке и проценты на резервы банков.<br><br>
+    <strong>Из чего состоит механизм:</strong> Эта ночная межбанковская ставка — самый безрисковый процент в экономике. Любой другой инструмент (депозит, облигация, ипотека) должен предлагать не меньше, иначе никто не будет рисковать вкладывать деньги за тот же доход. Поэтому ставка ФРС утягивает за собой вообще все процентные ставки в стране — включая доходность государственных облигаций.<br><br>
+    <strong>Как это влияет на золото:</strong> Ставка ФРС растёт → доходность облигаций растёт вслед за ней → держать облигации становится выгоднее, чем держать золото → часть денег перетекает из золота в облигации → спрос на золото падает → цена снижается. Рынок реагирует на ожидания заранее, не дожидаясь самого решения — поэтому даже небольшой сдвиг вероятности (как снижение с 64% до 50% на сентябрь после слабого NFP) двигает цену золота уже сегодня.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Core PCE Price Index (инфляция)</div>
+    <strong>Перевод названия:</strong> "Базовый индекс цен расходов на личное потребление".<br><br>
+    <strong>Откуда взялась цифра и что она значит:</strong> Core PCE за май 2026 вырос на 3.4% за год (и на 0.3% за месяц) — максимум с октября 2023, заметно выше цели ФРС в 2%. Общий PCE (с учётом еды и энергии) составил 4.1% за год — выше, потому что в мае подскочили цены на энергию из-за конфликта на Ближнем Востоке. Именно на Core-версию (3.4%), а не общую (4.1%), смотрит ФРС при решениях по ставке.<br><br>
+    <strong>Кто считает и как:</strong> Считает BEA (Bureau of Economic Analysis, "Бюро экономического анализа") — государственное агентство США. Каждый месяц собирают данные о том, сколько денег американцы тратят на тысячи товаров и услуг (от аренды жилья до подписки на Netflix) и сравнивают с ценами на тот же набор в прошлом месяце и году.<br><br>
+    <strong>Из чего состоит расчёт:</strong> Из общего набора убирают еду (продукты, рестораны) и энергию (бензин, электричество) — не потому что они не важны, а потому что их цены скачут резко и часто по случайным причинам (заморозки на ферме, нефтяной кризис, война), маскируя общий тренд. Убрав их, видно более стабильное "ядро" (Core) инфляции.<br><br>
+    <strong>Как это влияет на золото:</strong> ФРС использует Core PCE как главный индикатор инфляции — более важный для них, чем похожий показатель CPI. Если Core PCE выходит выше прогноза — сигнал, что инфляция разгоняется сильнее, и ФРС с большей вероятностью повысит ставку (см. фактор выше) → золото падает. В этот раз Core PCE вышел точно как прогнозировал рынок — поэтому неожиданного шока не случилось, и золото отреагировало спокойным отскоком, а не падением.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Индекс доллара DXY</div>
+    <strong>Перевод названия:</strong> "U.S. Dollar Index" — "Индекс доллара США".<br><br>
+    <strong>Откуда взялась цифра и что она значит:</strong> DXY торгуется около 100.8 — просел после слабого отчёта NFP (2 июля), но по-прежнему укрепился на 1.47% за последний месяц и на 4.04% за последние 12 месяцев. То есть в течение года доллар в целом укреплялся, хотя последние дни заметно слабеет на фоне слабых данных по занятости.<br><br>
+    <strong>Кто считает и как:</strong> Индекс изначально разработан Федеральной резервной системой в 1973 году. Он измеряет силу доллара не против одной валюты, а против "корзины" из шести валют сразу — каждая со своим весом: евро (57.6% — самая большая доля), японская иена (13.6%), фунт стерлингов (11.9%), канадский доллар (9.1%), шведская крона (4.2%), швейцарский франк (3.6%).<br><br>
+    <strong>Из чего состоит механизм:</strong> Это не абсолютная "сила экономики", а относительное соотношение — DXY растёт, если доллар укрепляется именно против этой конкретной корзины валют, даже если внутри США что-то идёт не так. Поэтому DXY реагирует не только на новости США, но и на то, что происходит в еврозоне, Японии и Британии.<br><br>
+    <strong>Как это влияет на золото:</strong> Золото торгуется в долларах по всему миру. Если доллар укрепляется (DXY растёт) — то же самое золото становится дороже для всех, кто покупает не в долларах (за евро, иены), и спрос падает. Если доллар слабеет (DXY падает) — золото становится относительно дешевле для остального мира, спрос растёт. Это не совпадение, а прямая механика цены, выраженной в одной и той же валюте.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Геополитика и "safe haven" спрос</div>
+    <strong>Перевод названия:</strong> "Safe haven" — "тихая гавань", "безопасное убежище".<br><br>
+    <strong>Откуда взялась оценка и что она значит:</strong> Действует 60-дневное перемирие США-Иран, но в Ормузском проливе произошёл иранский удар по судну — то есть формальный мир есть, но напряжение не исчезло полностью.<br><br>
+    <strong>Кто оценивает и как:</strong> В отличие от ставки или PCE, тут нет одного государственного агентства с точной цифрой — рынок оценивает риск через цену нефти (Ормузский пролив — это путь 20% мировой нефти), новостной поток и резкость движений самого золота в моменты обострений.<br><br>
+    <strong>Из чего состоит механизм:</strong> Это не финансовая, а психологическая механика. Когда в мире растёт неопределённость (войны, кризисы) — люди не уверены, что будет с акциями, валютами, даже банками. Золото веками воспринимается как актив, который физически существует и "не обанкротится" — в отличие от акции компании или валюты страны.<br><br>
+    <strong>Как это влияет на золото:</strong> Рост напряжения = рост спроса на золото как "тихую гавань". Когда напряжение спадает (как сейчас, с действующим перемирием) — часть этого страхового спроса уходит, что слегка давит на цену вниз, даже если по экономике всё нейтрально. Но отдельные инциденты (как удар по судну) не дают этому спросу полностью исчезнуть.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Спрос центробанков</div>
+    <strong>Перевод названия:</strong> Central bank gold demand — "спрос центральных банков на золото".<br><br>
+    <strong>Откуда взялась цифра и что она значит:</strong> По данным World Gold Council ("Всемирный золотой совет"), глобальный спрос на золото достиг исторического квартального рекорда — 1,313 тонн. Это не разовая покупка, а продолжающийся структурный тренд последних нескольких лет.<br><br>
+    <strong>Кто считает и как:</strong> World Gold Council — международная организация, объединяющая крупнейших добытчиков золота, которая собирает данные о покупках центробанков разных стран (Китай, Индия, Турция, Польша и другие) и публикует квартальные отчёты.<br><br>
+    <strong>Из чего состоит механизм:</strong> Центробанки покупают золото не для спекуляции и не реагируют на новости недели — они формируют резервы на десятилетия вперёд, часто по политическим причинам (например, снижение зависимости от доллара как резервной валюты на фоне геополитических трений).<br><br>
+    <strong>Как это влияет на золото:</strong> Это спрос, который существует независимо от того, что происходит с инфляцией или ставкой сегодня — поэтому этот фактор почти всегда "бычий" в долгосрочной перспективе. Он не противоречит остальным краткосрочным факторам (ставка, PCE, доллар), а работает в другом временном масштабе: краткосрочно цена может падать из-за ставки ФРС, но долгосрочно этот структурный спрос держит цену снизу, как подушка.
+  </div>
+  </details>
+</details>
+
+<table>
+  <thead>
+    <tr>
+      <th>Важность</th>
+      <th>Фактор</th>
+      <th>Что это значит (просто) + почему влияет</th>
+      <th>Оценка</th>
+      <th>Направление</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- Высокая важность (самое сильное влияние на золото прямо сейчас) -->
+    <tr>
+      <td><span class="badge" style="background:rgba(226,87,76,0.2); color:#e2574c; font-weight:700;">ВЫСОКАЯ</span></td>
+      <td class="factor" id="factor-fed">Ставка ФРС / тон Уорша</td>
+      <td class="simple">
+        Ставка сейчас 3.50–3.75%. По разным источникам на 4-6 июля вероятность паузы 29 июля оценивается в 66-76% (цифра гуляет день ото дня — сверьте точное значение по ссылке на CME FedWatch ниже). Более важная деталь: июньский "dot plot" ФРС (публикуется 4 раза в год) впервые за этот цикл сдвинулся в сторону повышения, а не снижения ставки к концу года — фьючерсы закладывают примерно один хайк на 25 б.п. до конца 2026.<br><br>
+        <strong>Простыми словами + почему:</strong> Высокая ставка = деньги выгоднее держать в банке/облигациях, а не в золоте (золото процентов не платит).<br><br>
+        <strong>Источник (проверьте сами):</strong> <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener">CME FedWatch Tool</a> · <a href="https://fedratecalc.com/fomc-meeting-schedule/" target="_blank" rel="noopener">FedRateCalc — календарь и dot plot ФРС</a>
+      </td>
+      <td class="verdict verdict-bearish">Медвежий (структурно)<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">dot plot сдвинулся к хайку, а не к снижению</span></td>
+      <td class="direction"><span class="badge badge-bearish">давит на золото</span></td>
+    </tr>
+    <tr>
+      <td><span class="badge" style="background:rgba(226,87,76,0.2); color:#e2574c; font-weight:700;">ВЫСОКАЯ</span></td>
+      <td class="factor" id="factor-nfp">Занятость / NFP (слабый отчёт)</td>
+      <td class="simple">
+        Отчёт за июнь (вышел 2 июля): 57K новых рабочих мест против прогноза 110K и 139K в мае — факт на 48% ниже прогноза. Безработица упала до 4.2%, но в основном из-за того, что 700 тыс. человек покинули рынок труда, а не из-за найма.<br><br>
+        <strong>Простыми словами + почему:</strong> Мало новых рабочих мест = экономика слабее, чем ждали → ФРС меньше причин повышать ставку → хорошо для золота.<br><br>
+        <strong>Источник:</strong> <a href="https://www.bls.gov/news.release/empsit.nr0.htm" target="_blank" rel="noopener">BLS — официальный отчёт Employment Situation</a>
+      </td>
+      <td class="verdict verdict-bullish">Бычий (сильный)<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">факт на 48% хуже прогноза</span></td>
+      <td class="direction"><span class="badge badge-bullish">сильно поддержало золото</span></td>
+    </tr>
+    <tr>
+      <td><span class="badge" style="background:rgba(226,87,76,0.2); color:#e2574c; font-weight:700;">ВЫСОКАЯ</span></td>
+      <td class="factor" id="factor-inflation">Инфляция (PCE + Nowcast)</td>
+      <td class="simple">
+        Core PCE за май: 3.4% г/г (цель ФРС — 2%). Общий PCE — 4.1% г/г. Вышло точно по прогнозу, без сюрприза.<br><br>
+        <strong>Простыми словами + почему:</strong> Высокая инфляция толкает ФРС повышать ставку (плохо для золота). Но раз данные совпали с прогнозом — сюрприза для рынка не было, и золото отреагировало нейтрально.<br><br>
+        <strong>Источник:</strong> <a href="https://www.bea.gov/data/personal-consumption-expenditures-price-index" target="_blank" rel="noopener">BEA — PCE Price Index</a>
+      </td>
+      <td class="verdict verdict-bullish">Нейтрально<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">факт = прогноз, сюрприза нет</span></td>
+      <td class="direction"><span class="badge badge-neutral">смешанно</span></td>
+    </tr>
+
+    <!-- Средняя важность -->
+    <tr>
+      <td><span class="badge" style="background:rgba(232,162,60,0.2); color:#e8a23c; font-weight:700;">СРЕДНЯЯ</span></td>
+      <td class="factor" id="factor-dxy">Индекс доллара (DXY)</td>
+      <td class="simple">
+        DXY ≈ 100.8, просел после слабого NFP. Но 52-недельный диапазон DXY — 95.55–101.80, то есть текущий уровень — это ~84% этого диапазона (formula: (100.8−95.55)/(101.80−95.55)). Доллар всё ещё в верхней части своего годового коридора, несмотря на недавний откат.<br><br>
+        <strong>Простыми словами + почему:</strong> Золото продаётся за доллары. Слабый доллар = золото дешевле для всего мира → спрос растёт. Но раз доллар всё ещё высоко в своём годовом диапазоне — краткосрочное облегчение, а не разворот тренда.<br><br>
+        <strong>Источник:</strong> <a href="https://finance.yahoo.com/quote/DX-Y.NYB/" target="_blank" rel="noopener">Yahoo Finance — DXY, 52-недельный диапазон</a>
+      </td>
+      <td class="verdict verdict-bullish">Смешанно<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">краткосрочно ↓, но 84‑й процентиль года</span></td>
+      <td class="direction"><span class="badge badge-neutral">неоднозначно</span></td>
+    </tr>
+    <tr>
+      <td><span class="badge" style="background:rgba(232,162,60,0.2); color:#e8a23c; font-weight:700;">СРЕДНЯЯ</span></td>
+      <td class="factor" id="factor-yield">Реальная доходность (TIPS 10Y)</td>
+      <td class="simple">
+        <strong>Важная поправка:</strong> раньше здесь стояла номинальная доходность (4.48%) под названием «реальная» — это была ошибка в названии. Настоящая реальная доходность (10-летние TIPS) — 2.25% на 2 июля, выросла на 0.15 п.п. за месяц и на 0.25 п.п. за год. Разница между номинальной и реальной (4.48% − 2.25% = 2.23%) — это рыночная инфляционная ожидаемость (breakeven), она близка к цели ФРС в 2%.<br><br>
+        <strong>Простыми словами + почему:</strong> Именно реальная доходность — то, что по-настоящему конкурирует с золотом (золото тоже не даёт реальной доходности, но и не съедается инфляцией). Она стабильно растёт весь год — это дольше и устойчивее давит на золото, чем разовые новости.<br><br>
+        <strong>Источник:</strong> <a href="https://tradingeconomics.com/united-states/10-year-tips-yield" target="_blank" rel="noopener">Trading Economics — 10Y TIPS Yield</a> · <a href="https://fred.stlouisfed.org/series/DFII10" target="_blank" rel="noopener">FRED DFII10 (официальный ряд)</a>
+      </td>
+      <td class="verdict verdict-bearish">Медвежий (сильный)<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">реальная доходность растёт весь год</span></td>
+      <td class="direction"><span class="badge badge-bearish">давит на золото</span></td>
+    </tr>
+
+    <!-- Ниже важность (структурные / долгосрочные) -->
+    <tr>
+      <td><span class="badge" style="background:rgba(139,146,156,0.2); color:#8b929c; font-weight:700;">НИЖЕ</span></td>
+      <td class="factor" id="factor-cb">Спрос центробанков</td>
+      <td class="simple">
+        Квартальный спрос на золото — 1,313 тонн, рекорд по данным World Gold Council. Крупные покупатели — Китай, Индия, Турция, Польша.<br><br>
+        <strong>Простыми словами + почему:</strong> Это огромный постоянный покупатель, который не зависит от недельных новостей. Держит цену снизу как подушка — долгосрочный позитив.<br><br>
+        <strong>Источник:</strong> <a href="https://www.gold.org/goldhub/research/gold-demand-trends" target="_blank" rel="noopener">World Gold Council — Gold Demand Trends</a>
+      </td>
+      <td class="verdict verdict-bullish">Бычий (структурно)<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">квартальный рекорд закупок</span></td>
+      <td class="direction"><span class="badge badge-bullish">поддерживает золото</span></td>
+    </tr>
+    <tr>
+      <td><span class="badge" style="background:rgba(139,146,156,0.2); color:#8b929c; font-weight:700;">НИЖЕ</span></td>
+      <td class="factor" id="factor-geo">Геополитика (Иран)</td>
+      <td class="simple">
+        60-дневное перемирие США-Иран действует с 17 июня (истекает 17 августа), но не полностью соблюдается. Трафик судов через Ормузский пролив — стабильно около 25 в день против ~110 в день до войны, то есть ~23% от нормы (без изменений на 4-6 июля). Новое 5 июля: посол Ирана в Китае заявил, что после окончания перемирия Иран введёт платный проход для судов, с "особыми условиями" для дружественных стран (Китай и др.) — то есть Иран готовится удерживать контроль над проливом и после формального завершения перемирия.<br><br>
+        <strong>Простыми словами + почему:</strong> Напряжение создаёт страховой спрос на золото ("тихая гавань"). Формальный мир есть, но реальная нормализация ещё далеко, а новые заявления Ирана про платный проход после августа — сигнал, что напряжение может продолжиться и после текущего перемирия.<br><br>
+        <strong>Источник:</strong> <a href="https://www.bloomberg.com/news/articles/2026-07-03/strait-of-hormuz-sailors-remain-trapped-despite-iran-us-ceasefire" target="_blank" rel="noopener">Bloomberg, 3 июля</a> · <a href="https://www.aljazeera.com/news/2026/7/5/irans-china-envoy-vows-special-hormuz-treatment-for-friendly-countries" target="_blank" rel="noopener">Al Jazeera, 5 июля</a> · <a href="https://hormuzstraitmonitor.com/crisis-timeline/" target="_blank" rel="noopener">Hormuz Strait Monitor — хронология</a>
+      </td>
+      <td class="verdict verdict-bullish">Неопределённо / умеренно бычий<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">трафик всё ещё ~23% от довоенного</span></td>
+      <td class="direction"><span class="badge badge-neutral">неопределённость</span></td>
+    </tr>
+    <tr>
+      <td><span class="badge" style="background:rgba(139,146,156,0.2); color:#8b929c; font-weight:700;">НИЖЕ</span></td>
+      <td class="factor" id="factor-tech">Техническая структура</td>
+      <td class="simple">
+        Золото отскочило на 2% за неделю (29 июня — 3 июля), прервав серию из 4 недель падения подряд. Но за месяц в целом всё ещё в минусе (~-6.8%).<br><br>
+        <strong>Простыми словами + почему:</strong> Техника показывает текущее настроение трейдеров. Важно, но обычно слабее фундаментальных факторов (ставка, занятость, инфляция).<br><br>
+        <strong>Важно:</strong> это не факт с источником, а моё чтение графика — субъективная интерпретация уровней, а не независимая измеримая величина. Проверьте сами на живом графике.<br>
+        <strong>Источник для проверки:</strong> <a href="https://www.tradingview.com/symbols/XAUUSD/" target="_blank" rel="noopener">TradingView — XAU/USD live chart</a>
+      </td>
+      <td class="verdict verdict-bullish">Не определено<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">субъективный технический взгляд</span></td>
+      <td class="direction"><span class="badge badge-neutral">смешанная картина</span></td>
+    </tr>
+    <tr>
+      <td><span class="badge" style="background:rgba(232,162,60,0.2); color:#e8a23c; font-weight:700;">СРЕДНЯЯ</span></td>
+      <td class="factor" id="factor-etf">Спрос через ETF (GLD)</td>
+      <td class="simple">
+        Крупнейший золотой ETF (SPDR Gold Shares, GLD) держал 1,007 тонн золота на 25 июня — это на ~6 тонн меньше, чем днём ранее. То есть был чистый отток, а не приток.<br><br>
+        <strong>Простыми словами + почему:</strong> Это самый быстрый индикатор реального инвестиционного спроса — обновляется каждый день, в отличие от COT (раз в неделю) и спроса центробанков (раз в квартал). Отток = инвесторы продают, а не покупают.<br><br>
+        <strong>Важно:</strong> данные на 25 июня — я проверил снова 6 июля и более свежих чисел не нашёл (это последнее опубликованное значение, которое мне удалось найти). Один день оттока — это шум, а не тренд; проверьте актуальную цифру по ссылке ниже.<br>
+        <strong>Источник:</strong> <a href="https://www.ssga.com/us/en/intermediary/etfs/spdr-gold-shares-gld" target="_blank" rel="noopener">SSGA — SPDR Gold Shares, официальная страница holdings</a>
+      </td>
+      <td class="verdict verdict-bearish">Медвежий (слабый)<br><span style="font-size:10px; font-weight:400; color:var(--text-dim);">данные на 25 июня, требуют проверки</span></td>
+      <td class="direction"><span class="badge badge-bearish">небольшой отток</span></td>
+    </tr>
+  </tbody>
+</table>
+<details open>
+  <summary class="section-title">Позиции крупных игроков (отчёт CFTC COT по золоту) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+<p style="font-size:13px; color:var(--text-dim); line-height:1.6; margin-bottom:14px;">
+  Это официальный еженедельный отчёт американского регулятора (CFTC) — кто реально держит сколько контрактов на золото прямо сейчас: производители-хеджеры, банки (своп-дилеры) и крупные спекулянты (Managed Money).
+</p>
+<details class="learn-box">
+  <summary>Как читать эту таблицу — логика, а не перевод (открой один раз и разберись навсегда)</summary>
+  <div class="learn-step">
+    <div class="learn-step-title">Commitments of Traders Report (сам отчёт)</div>
+    <strong>Перевод названия:</strong> "Отчёт о вовлечённости трейдеров" — часто сокращают до COT.<br><br>
+    <strong>Откуда взялась цифра и что она значит:</strong> Последний отчёт — данные на 16 июня 2026, опубликован 19 июня. Лаг в 3 дня — это не задержка по вине источника, а стандартная практика: данные собираются по состоянию на вторник, обрабатываются и публикуются в пятницу.<br><br>
+    <strong>Кто считает и как:</strong> Считает CFTC (Commodity Futures Trading Commission, "Комиссия по торговле товарными фьючерсами США") — государственный регулятор товарных бирж. Каждую неделю все крупные участники рынка обязаны отчитываться перед CFTC о размере своих открытых позиций по фьючерсам.<br><br>
+    <strong>Из чего состоит расчёт:</strong> CFTC берёт все открытые контракты на золото на бирже COMEX и распределяет их по категориям участников (см. шаги ниже), отдельно считая, сколько контрактов куплено (Long) и продано (Short) каждой группой.<br><br>
+    <strong>Почему это важно отдельно от новостей:</strong> Это единственный показатель в этом дашборде, основанный не на мнениях и новостях, а на реальных, зарегистрированных у регулятора позициях — то, что крупные игроки на самом деле сделали, а не что они говорят в интервью.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Producer/Merchant, Swap Dealers, Managed Money (категории участников)</div>
+    <strong>Перевод названий:</strong> Producer/Merchant — "производитель/торговец"; Swap Dealers — "дилеры свопов" (своп — это финансовый контракт обмена); Managed Money — "управляемые деньги".<br><br>
+    <strong>Откуда взялись эти три категории:</strong> Так CFTC классифицирует всех участников рынка фьючерсов по их роли, а не по размеру — это часть официальной методологии Disaggregated COT Report.<br><br>
+    <strong>Кто это конкретно и зачем им контракты:</strong><br>
+    <span class="who">Producer/Merchant</span> — реальные компании (золотодобытчики, переработчики — например, Newmont, Barrick Gold). Через год они добудут и продадут тонны золота, но не знают будущую цену. Чтобы не зависеть от случая, они продают часть будущей добычи вперёд уже сейчас — это их шорт. Управление риском бизнеса, а не ставка против рынка.<br><br>
+    <span class="who">Swap Dealers</span> — в основном банки (JPMorgan, Goldman Sachs, HSBC). Когда золотодобытчик хочет захеджироваться, банк часто становится другой стороной сделки, а затем перекладывает риск дальше. Их позиция отражает суммарный спрос клиентов на хедж, а не личное мнение банка о цене.<br><br>
+    <span class="who">Managed Money</span> — хедж-фонды и профессиональные трейдеры. У них нет рудников и клиентов для хеджирования — единственная причина держать контракт это ставка на цену ради прибыли. Самый "чистый" индикатор того, что профессионалы реально думают о рынке.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Long / Short / Net (сами цифры в таблице)</div>
+    <strong>Перевод названий:</strong> Long — "длинная позиция" (ставка на рост); Short — "короткая позиция" (ставка на падение); Net — "чистая позиция" (разница между ними).<br><br>
+    <strong>Откуда взялись текущие цифры:</strong> Например, у Managed Money: Long = 123,011 контрактов, Short = 27,118, Net = +95,893. Это означает, что хедж-фонды держат почти в 4.5 раза больше "ставок на рост", чем "ставок на падение".<br><br>
+    <strong>Как это считается:</strong> Long — сколько контрактов куплено в ожидании роста цены. Short — сколько продано в ожидании падения. Net — простая разница (Long минус Short). Если Net положительный — группа в целом настроена на рост, если отрицательный — на падение.<br><br>
+    <strong>Почему сама цифра ещё ничего не говорит:</strong> +95,893 контрактов — это много или мало? Ответ зависит не от абсолютного числа, а от того, насколько это велико по сравнению с историческим диапазоном именно этой группы — это и разбирается в следующем шаге.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">"Экстремальный уровень" (логика зелёного/красного)</div>
+    <strong>Откуда взялась оценка:</strong> У каждой группы есть исторический диапазон, в котором её позиция обычно колеблется за последние годы. Когда текущая позиция подходит к границе этого диапазона — её называют экстремальной.<br><br>
+    <strong>Из чего состоит логика:</strong> На рынке ограниченное число участников. Если почти все, кто хотел купить, уже купили — покупать больше особо некому, и движение вверх выдыхается. То же самое работает в обратную сторону для шортов.<br><br>
+    <strong>Как это превращается в цвет:</strong><br>
+    🟢 <strong>Зелёный</strong> — позиция группы далеко от своего исторического предела. Есть запас: больше участников могут присоединиться, тренд может продолжаться без немедленного разворота.<br>
+    🔴 <strong>Красный</strong> — позиция у самого предела, запаса почти нет. Не значит "разворот будет завтра", но значит — стоит быть внимательным к признакам разворота именно в этой группе.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Short Squeeze (почему красный шорт у банков — это не просто "плохо для золота")</div>
+    <strong>Перевод названия:</strong> "Сжатие шортистов" — ситуация, когда продавцам приходится откупать обратно то, что они продали.<br><br>
+    <strong>Откуда возникает этот эффект:</strong> Когда у группы экстремально много шортов (как сейчас у Swap Dealers: Short = 217,086 против Long = 41,702), и цена начинает идти против них (расти) — у них есть стоп-лоссы или внутренние лимиты риска.<br><br>
+    <strong>Из чего состоит механизм:</strong> Чтобы не терять больше, они вынуждены выкупать обратно то, что продали — то есть закрывать шорт через покупку. Массовое закрытие шортов = дополнительный спрос на покупку = цена может вырасти ещё быстрее.<br><br>
+    <strong>Как это влияет на золото:</strong> Экстремальный шорт превращается из медвежьего сигнала в потенциальное топливо для резкого роста. Поэтому красный цвет у Swap Dealers — это не "продавай золото", а "следи за этой группой особенно внимательно — если цена пойдёт против них, эффект может быть резким и быстрым".
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Итог: как смотреть на таблицу за 10 секунд</div>
+    1. Смотри на Managed Money — это самый честный индикатор настроения рынка.<br>
+    2. Смотри, не покраснела ли какая-то группа — это сигнал "здесь накопилось напряжение".<br>
+    3. Если красный у банков (Swap Dealers) — держи в уме риск short squeeze вверх.<br>
+    4. Если красный у Managed Money в лонге — держи в уме риск, что покупателям скоро некого будет привлекать, и возможна коррекция вниз.
+  </div>
+</details>
+<table class="cot-table">
+  <thead>
+    <tr>
+      <th>Категория</th>
+      <th class="cot-num">Long</th>
+      <th class="cot-num">Short</th>
+      <th class="cot-num">Net</th>
+      <th>Вердикт</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="factor">Producer/Merchant<br><span style="font-size:11px; color:var(--text-faint); font-weight:400;">Реальные производители золота, хеджируют бизнес</span></td>
+      <td class="cot-num">13,643</td>
+      <td class="cot-num">35,041</td>
+      <td class="cot-num">-21,398</td>
+      <td class="cot-verdict-green">Зелёный. Без паники.</td>
+    </tr>
+    <tr>
+      <td class="factor">Swap Dealers<br><span style="font-size:11px; color:var(--text-faint); font-weight:400;">В основном крупные банки</span></td>
+      <td class="cot-num">41,702</td>
+      <td class="cot-num">217,086</td>
+      <td class="cot-num">-175,384</td>
+      <td class="cot-verdict-red">Красный. Экстремально много шортов.</td>
+    </tr>
+    <tr>
+      <td class="factor">Managed Money<br><span style="font-size:11px; color:var(--text-faint); font-weight:400;">Крупные спекулянты — "умные деньги", индикатор толпы</span></td>
+      <td class="cot-num">123,011</td>
+      <td class="cot-num">27,118</td>
+      <td class="cot-num">95,893</td>
+      <td class="cot-verdict-green">Зелёный. Без паники.</td>
+    </tr>
+  </tbody>
+</table>
+<div class="cot-source-note">
+  <strong id="factor-cot">Простыми словами по таблице выше:</strong> банки (Swap Dealers) сейчас держат огромный шорт — это исторически бывает опасно для самих продавцов: если цена пойдёт вверх, им придётся резко закрывать позиции, что может ускорить рост (это и называют "short squeeze"). При этом крупные спекулянты (Managed Money) уверенно в лонге, но ещё не на экстремальном уровне — паниковать рано.
+  <br><br>
+  Источник: <a href="https://www.cftc.gov/dea/futures/other_sf.htm" style="color:var(--accent-gold);">CFTC Disaggregated COT Report</a> (официальный регулятор США) · Данные на 16 июня 2026, опубликовано 19 июня.
+  <br>
+  <strong>Важно:</strong> CFTC публикует этот отчёт только раз в неделю, по пятницам, с данными на предыдущий вторник — это не "живые" цифры, как цена выше, и обновляться чаще физически не может. Чтобы обновить весь дашборд (включая этот блок) на самые свежие данные — просто попроси в чате «обнови дашборд».
+</div>
+</details>
+
+<details open>
+  <summary class="section-title">Общий вердикт: long или short прямо сейчас? <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+<div class="verdict-box">
+  <div class="verdict-title">Простыми словами — что происходит</div>
+  <div class="verdict-text">
+    Полный счёт (см. разбивку с источниками в самом верху страницы) — из 10 факторов:<br>
+    <strong>3 фактора — медвежьи</strong> (ставка ФРС на годовом горизонте, реальная доходность TIPS — растёт весь год, отток из ETF GLD)<br>
+    <strong>3 фактора — бычьи</strong> (слабый NFP, устойчивый спрос центробанков, позиционирование COT — риск short squeeze у банков)<br>
+    <strong>4 фактора — нейтральные</strong> (инфляция вышла точно по прогнозу, DXY просел краткосрочно, но всё ещё высоко в годовом диапазоне, геополитика без явной эскалации, техническая картина неоднозначна)<br><br>
+    Краткосрочно (недели) счёт слегка в пользу быков, структурно (месяцы-годы) — в пользу медведей. В сумме — баланс, а не явный тренд.<br><br>
+    Золото дало отскок +2% за неделю (29 июня — 3 июля), прервав серию из 4 недель падения подряд — но за месяц в целом цена всё ещё в минусе (~-6.8%). Рынок реагирует на слабый NFP с облегчением, но структурно рынок фьючерсов всё ещё закладывает движение ставки ФРС вверх на годовом горизонте (июньский dot plot ФРС впервые сдвинулся к хайку, а не к снижению), а реальная доходность (TIPS) растёт весь год — этот фон никуда не делся.
+  </div>
+  <div class="verdict-summary">
+    <strong>Вывод на ближайшие дни:</strong><br>
+    Золото торгуется около $4,040, в диапазоне примерно $3,950–$4,100. Резкого продолжения падения данные пока не подтверждают, но и уверенного разворота вверх тоже нет — два дня отскока против четырёх недель снижения.<br>
+    <span style="color:#e8a23c; font-weight:600;">→ Сейчас скорее боковик (диапазон), чем чёткий long или short.</span>
+  </div>
+  <div class="verdict-summary bullish" style="margin-top:12px;">
+    <strong>Вывод на долгосрочную перспективу (1-3 года):</strong><br>
+    Покупки центробанков продолжаются и не зависят от недельных новостей. Если будет ещё одна волна падения — это историческая зона интереса для долгосрочных покупателей.<br>
+    <span style="color:#3ecf8e; font-weight:600;">→ Глубокие просадки остаются зоной интереса для long на годы вперёд.</span>
+  </div>
+  <div style="margin-top:16px; font-size:13px; color:#8b929c; line-height:1.5;">
+    <strong>Самое разумное действие прямо сейчас:</strong><br>
+    Рынок только начал успокаиваться после резкого падения — это не время для уверенных крупных ставок в одну сторону. Если используешь индикаторы (классический или SMC), особенно важно ждать чёткого совпадения сигналов по всем таймфреймам, а не действовать на одном сигнале.
+  </div>
+</div>
+</details>
+
+
+
+<div class="section learn-master">
+  <h2>🎓 КАК ДУМАТЬ КАК ТРЕЙДЕР — ПОШАГОВЫЙ РЕЦЕПТ (учись делать вывод сам)</h2>
+  <p class="learn-intro">
+    Это не таблица с готовым ответом. Это <b>рецепт мышления</b>, который повторяют
+    настоящие финансисты. Прочитай один раз внимательно, потом просто повторяй
+    шаги каждый день — и через пару недель ты будешь смотреть на цифры и сам
+    понимать, куда «дует ветер», без чьей-либо подсказки.
+    <br><br>
+    <b>Главная мысль, которую надо запомнить навсегда:</b> золото — это как качели.
+    На одной стороне сидит <b>ДОЛЛАР и ставка</b> (когда они сильные — золото падает),
+    на другой — <b>СТРАХ и слабый доллар</b> (когда их много — золото растёт).
+    Всё, что происходит в новостях, ты просто раскладываешь на эти две чаши весов.
+  </p>
+  <details class="learn-box" open>
+    <summary>🪜 ШАГ 1. Посмотри на 3 «живых числа» — их ты можешь проверить сам за 1 минуту</summary>
+    <div class="learn-body">
+      <p>Каждое утро смотри на три числа. Не надо их переводить — надо понять,
+      <b>в какую сторону они толкают золото</b>. Запомни правило качелей:</p>
+      <div class="learn-step">
+        <div class="learn-step-title">① Доллар (DXY) — вырос или упал за день?</div>
+        <b>Что это:</b> DXY (Dollar Index) — это «сила доллара» по сравнению с
+        другими валютами (евро, йена и т.д.). Считает биржа ICE.
+        <br><b>Логика (не перевод!):</b> золото во всём мире продают за доллары.
+        Представь, что доллар — это цена «входного билета» на золото.
+        Доллар <b>подорожал</b> → билет дороже → покупателей меньше → <b>золото ВНИЗ</b>.
+        Доллар <b>подешевел</b> → билет дешевле → покупателей больше → <b>золото ВВЕРХ</b>.
+        <br><b>Пример сегодня:</b> DXY ≈ 100.8, заметно ослаб после слабого NFP → плюс для золота.
+        <br><b>Бытовая аналогия:</b> как курс доллара в обменнике. Если доллар дорожает,
+        то импортные кроссовки (которые в долларах) для тебя дорожают — и ты
+        покупаешь их реже. Золото — те же «долларовые кроссовки» для всего мира.
+      </div>
+      <div class="learn-step">
+        <div class="learn-step-title">② Доходность облигаций США (10 лет) — выросла или упала?</div>
+        <b>Что это:</b> сколько процентов в год платит государство США тем, кто
+        дал ему деньги в долг на 10 лет. Сейчас ≈ 4.48%.
+        <br><b>Логика:</b> золото не платит НИ КОПЕЙКИ процентов — оно просто лежит.
+        Облигации платят. Чем БОЛЬШЕ платят облигации, тем обиднее держать золото
+        (ведь рядом есть вариант получать 4.48% просто так). Деньги уходят из золота
+        в облигации → <b>золото ВНИЗ</b>. Ставка падает → золото становится не хуже
+        облигаций → <b>золото ВВЕРХ</b>.
+        <br><b>Пример сегодня:</b> 4.48% — это высоко → давит на золото.
+        <br><b>Бытовая аналогия:</b> у тебя есть выбор — положить деньги на вклад
+        под 10% (это облигации) или спрятать золотую монету в шкаф (она процентов
+        не даёт). Чем выше процент по вкладу, тем меньше хочется просто хранить монету.
+      </div>
+      <div class="learn-step">
+        <div class="learn-step-title">③ Nowcast инфляции — растёт ли разрыв между «общей» и Core?</div>
+        <b>Что это:</b> предсказание инфляции от ФРБ Кливленда (см. блок ниже).
+        <br><b>Логика:</b> если ОБЩАЯ инфляция намного выше Core (базовой) — значит
+        цены гонят вверх бензин и еда, а не «вся экономика». Это временно, ФРС на
+        это реагирует спокойнее. Если растёт именно Core — вот это серьёзно, ФРС
+        будет держать ставку высокой → давит на золото.
+        <br><b>Пример сегодня:</b> CPI 3.92% против Core CPI 2.85% — разрыв ~1.1%,
+        значит виновата в основном энергия, а не «глубокая» инфляция.
+      </div>
+      <p class="learn-note">📝 <b>Итог шага 1:</b> запиши для себя простой счёт.
+      Сегодня: доллар — лёгкий плюс золоту, облигации — минус, инфляция — смешанно.
+      Пока «качели» почти в равновесии.</p>
+    </div>
+  </details>
+  <details class="learn-box">
+    <summary>🪜 ШАГ 2. Прочитай ОДНУ главную новость про ФРС и задай 2 вопроса</summary>
+    <div class="learn-body">
+      <p>ФРС (Центробанк США) — это «главный по деньгам». Когда её глава говорит,
+      весь рынок слушает. Тебе не надо читать 10 статей — найди ОДНУ свежую про то,
+      что сказал глава ФРС (сейчас это <b>Кевин Уорш</b>), и задай два вопроса:</p>
+      <div class="learn-step">
+        <div class="learn-step-title">Вопрос А: прозвучало ли что-то «мягкое»?</div>
+        Слова-подсказки: «риски инфляции снизились», «пауза», «не будем спешить с
+        повышением». → Это <b>бычий</b> намёк (золото ВВЕРХ). Мягкая ФРС = ставка
+        не растёт = золото дышит свободнее.
+      </div>
+      <div class="learn-step">
+        <div class="learn-step-title">Вопрос Б: прозвучало ли что-то «жёсткое»?</div>
+        Слова-подсказки: «вернём инфляцию к 2% любой ценой», «возможно повышение»,
+        «экономика сильная». → Это <b>медвежий</b> намёк (золото ВНИЗ).
+      </div>
+      <div class="learn-step learn-step-key">
+        <div class="learn-step-title">⚠️ САМОЕ ВАЖНОЕ: что делать, если в ОДНОЙ речи есть И ТО, И ДРУГОЕ?</div>
+        Именно так было с Уоршем 1 июля! Он сказал: «риски инфляции снизились»
+        (мягко, +) <b>И тут же</b> «мы всё равно вернём инфляцию к 2%» (жёстко, −).
+        Робот-калькулятор тут запутается. А ты сделай как профи:
+        <br><br>
+        👉 <b>Посмотри, как отреагировала ЦЕНА в первый час.</b> Цена — это
+        голосование миллионов людей реальными деньгами. Она — главный судья спора.
+        <br>В тот день золото <b>выросло на 2%</b> — значит рынок «услышал» больше
+        мягкого, чем жёсткого. Вот твой ответ: настрой сместился в сторону бычьего.
+        <br><br>
+        <b>Бытовая аналогия:</b> учитель сказал «контрольная будет сложная, НО я
+        разрешу пользоваться шпаргалкой». Одни услышали «сложная» и испугались,
+        другие — «шпаргалка!» и обрадовались. Чтобы понять, чего было больше —
+        посмотри на лица класса (это цена). Если все выдохнули с облегчением —
+        значит победило хорошее.
+      </div>
+    </div>
+  </details>
+  <details class="learn-box">
+    <summary>🪜 ШАГ 3. Добавь «кто как поставил деньги» — отчёт COT (толпа против банков)</summary>
+    <div class="learn-body">
+      <div class="learn-step">
+        <div class="learn-step-title">Посмотри на две группы в таблице COT выше</div>
+        <b>Managed Money (хедж-фонды)</b> — это «умная толпа». Если они массово
+        в лонге (ставят на рост) — тренд вверх есть, НО если их СЛИШКОМ много
+        в лонге, это опасно: покупать уже почти некому, скоро развернутся.
+        <br><br>
+        <b>Swap Dealers (банки)</b> — часто стоят в шорте (ставка на падение).
+        Если у них <b>экстремально много шортов</b> — это как сжатая пружина:
+        если цена вдруг пойдёт вверх, банкам придётся срочно закрывать шорты
+        (= покупать золото) → это добавит топлива росту. Называется <b>short squeeze</b>.
+      </div>
+      <div class="learn-step">
+        <div class="learn-step-title">Правило «запаса хода»</div>
+        🟢 Зелёный = группа далеко от своего исторического предела → есть «запас»
+        двигать рынок дальше.
+        <br>🔴 Красный = группа у предела → запас кончается, скоро может развернуться.
+        <br><br>
+        <b>Пример сегодня:</b> хедж-фонды нарастили лонги (128K), но не экстремально —
+        запас ещё есть. Банки в большом шорте — сжатая пружина заряжена.
+      </div>
+    </div>
+  </details>
+  <details class="learn-box">
+    <summary>🪜 ШАГ 4. Сложи всё в один вывод по готовому шаблону</summary>
+    <div class="learn-body">
+      <p>Теперь просто заполни пропуски вслух или на бумаге:</p>
+      <div class="learn-formula">
+        «Сегодня факторов ВНИЗ — <b>[сколько]</b>, ВВЕРХ — <b>[сколько]</b>.
+        <br>Главное событие — <b>[что]</b>, и цена на него отреагировала <b>[как]</b>.
+        <br>Толпа (хедж-фонды) стоит <b>[куда]</b>, банки — <b>[куда]</b>.
+        <br>Значит скорее <b>[БОКОВИК / ВВЕРХ / ВНИЗ]</b>, потому что <b>[причина]</b>.»
+      </div>
+      <div class="learn-step">
+        <div class="learn-step-title">✅ Пример готового вывода на сегодня (сделай так же сам завтра):</div>
+        «Факторов вниз ~2 (высокая доходность 4.48%, жёсткая часть речи ФРС),
+        вверх ~2 (слабый ADP, мягкая часть речи ФРС + слабый доллар).
+        Главное событие — речь Уорша, цена отреагировала <b>ростом +2%</b>.
+        Хедж-фонды в умеренном лонге, банки в большом шорте (пружина заряжена).
+        <b>Значит скорее осторожный отскок вверх внутри общего падения</b> — но
+        не уверенный разворот, потому что доходность высокая и ждём отчёт NFP,
+        который может всё перевернуть.»
+      </div>
+      <p class="learn-warning">
+        🚨 <b>Золотое правило честности (запомни навсегда):</b> этот вывод — это
+        НЕ предсказание и НЕ приказ «покупай сейчас». Никто в мире не знает цену
+        завтра — ни ты, ни я, ни банки. Твой вывод говорит только про <b>ветер</b>
+        («дует туда»), а не про то, куда именно приплывёт корабль. Перед событиями
+        вроде NFP ветер может резко поменяться — поэтому профи ждут подтверждения,
+        а не ставят все деньги на один прогноз.
+      </p>
+    </div>
+  </details>
+</div>
+<!-- ============ КОНЕЦ ОБУЧАЮЩЕГО БЛОКА ============ -->
+
+<details open>
+  <summary class="section-title">Inflation Nowcasting (предварительная оценка инфляции до официального релиза) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+<p style="font-size:13px; color:var(--text-dim); line-height:1.6; margin-bottom:14px;">
+  Федеральный резервный банк Кливленда каждый рабочий день публикует свою предварительную оценку того, какой будет официальная инфляция (CPI и PCE), за 2-3 недели до того, как выйдет настоящий отчёт.
+</p>
+<table class="cot-table">
+  <thead>
+    <tr>
+      <th>Показатель</th>
+      <th class="cot-num">Год к году</th>
+      <th>Что это значит</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="factor">CPI (общий)</td>
+      <td class="cot-num" style="font-size:16px; font-weight:600; color:var(--text);">3.96%</td>
+      <td class="simple">Полная инфляция, включая еду и энергию</td>
+    </tr>
+    <tr>
+      <td class="factor">Core CPI</td>
+      <td class="cot-num" style="font-size:16px; font-weight:600; color:var(--text);">2.85%</td>
+      <td class="simple">Без еды и энергии. Важный показатель (от BLS), но ФРС в основном ориентируется на Core PCE как главный индикатор при решениях по ставке.</td>
+    </tr>
+    <tr>
+      <td class="factor">PCE (общий)</td>
+      <td class="cot-num" style="font-size:16px; font-weight:600; color:var(--text);">3.90%</td>
+      <td class="simple">Альтернативный, более широкий способ считать инфляцию</td>
+    </tr>
+    <tr>
+      <td class="factor">Core PCE</td>
+      <td class="cot-num" style="font-size:16px; font-weight:600; color:var(--text);">3.43%</td>
+      <td class="simple">Главный показатель, на который смотрит ФРС при решениях по ставке</td>
+    </tr>
+  </tbody>
+</table>
+<div class="cot-source-note">
+  Источник: <a href="https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting" style="color:var(--accent-gold);">Cleveland Fed Inflation Nowcasting</a> · Обновляется каждый рабочий день около 10:00 утра по восточному времени США · Срез на 26 июня 2026
+</div>
+<details class="learn-box">
+  <summary>Как читать эти проценты и когда принимать решение — long/short/ждать (открой один раз и разберись навсегда)</summary>
+  <div class="learn-step">
+    <div class="learn-step-title">Nowcasting — что это и откуда берутся эти цифры</div>
+    <strong>Перевод названия:</strong> "Now" (сейчас) + "casting" (от forecasting, "прогнозирование") = "прогнозирование текущего момента". Не прогноз далёкого будущего, а попытка узнать то, что уже происходит прямо сейчас, но официально ещё не объявлено.<br><br>
+    <strong>Откуда взялась цифра и что она значит:</strong> Официальный отчёт по инфляции (CPI или PCE) выходит лишь раз в месяц, с задержкой в 2-4 недели. Но всё это время экономисты Кливлендского ФРС считают свою предварительную оценку каждый рабочий день, используя данные, которые поступят намного чаще.<br><br>
+    <strong>Кто считает и как:</strong> Федеральный резервный банк Кливленда — один из 12 региональных банков системы ФРС США. Модель использует 10 рядов данных: 5 от Бюро статистики труда (CPI и его компоненты), 3 от Бюро экономического анализа (PCE и его компоненты), еженедельные цены на бензин и ежедневные цены на нефть Brent.<br><br>
+    <strong>Из чего состоит расчёт:</strong> Логика простая — раз нефть и бензин меняются в цене каждый день/неделю, а именно энергия — самая "быстро скачущая" часть инфляции, можно использовать эти частые данные, чтобы заранее прикинуть итоговую цифру, которая выйдет официально только через несколько недель. Core-показатели (без еды/энергии) меняются редко — у них мало источников данных, которые приходят нечасто. Headline (общие) показатели двигаются часто, потому что зависят от волатильной нефти.<br><br>
+    <strong>Насколько это точно:</strong> Это не гарантия — это обоснованная оценка по всего 10 рядам данных, а не по полной официальной статистике из десятков тысяч наблюдений. Но исторически модель Кливленда в среднем точнее консенсус-прогнозов профессиональных экономистов (опросы Blue Chip и SPF).
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Главный сигнал: разрыв между общим и Core показателем</div>
+    Сейчас CPI (общий) = 3.96%, а Core CPI = 2.85% — разница почти 1.1 процентных пункта.<br><br>
+    <strong>Что это значит:</strong> Большой разрыв говорит, что именно еда и энергия (в основном нефть/бензин) сейчас разгоняют общую инфляцию сильнее, чем базовая, устойчивая часть экономики. Это важно, потому что ФРС в решениях по ставке смотрит в первую очередь на Core, а не на headline-показатель — значит, рынок может неверно испугаться "горячего" общего CPI, хотя реальная картина для ФРС спокойнее.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Три временных горизонта — когда именно действовать</div>
+    <strong>1. Прямо сейчас, в обычный день (когда ты просто смотришь на эти цифры):</strong><br>
+    Это не повод действовать немедленно. Nowcast обновляется каждый день, но официальный отчёт выйдет только через 2-3 недели — рынок не резко реагирует на ежедневную оценку Кливленда, он будет резко реагировать на сам официальный релиз.<br><br>
+    <strong>2. За 1 час / 30 минут до официального релиза CPI или PCE:</strong><br>
+    Вот когда это становится по-настоящему важным. Сравни nowcast от Кливленда с официальным рыночным консенсус-прогнозом (его публикуют экономические календари перед релизом):<br>
+    • Если nowcast <strong>выше</strong> консенсуса → рынок может получить "горячий" сюрприз → ФРС вероятнее ужесточит политику → золото вероятнее <span style="color:var(--red); font-weight:600;">упадёт</span><br>
+    • Если nowcast <strong>ниже</strong> консенсуса → шанс на "холодный" сюрприз → золото вероятнее <span style="color:var(--green); font-weight:600;">вырастёт</span><br><br>
+    <strong>3. Сразу после выхода официальных данных (самый надёжный момент):</strong><br>
+    Сравни фактическую цифру с официальным прогнозом (не с nowcast — именно с прогнозом). Реакция рынка в первые 5-15 минут после релиза обычно даёт самое ясное направление — это момент, когда большинство профессионалов фактически принимает решение, а не до него.
+  </div>
+  <div class="learn-step">
+    <div class="learn-step-title">Главное предупреждение, которое нужно держать в голове всегда</div>
+    Даже если nowcast и официальный консенсус совпадают на 100% — это не гарантирует, что цена не дёрнется. Рынок реагирует не только на саму итоговую цифру, но и на детали внутри отчёта (например, компоненты аренды жилья, услуг), которые ни nowcast, ни консенсус не всегда улавливают полностью. Используй эти цифры как контекст для своего решения, а не как готовый автоматический сигнал.
+  </div>
+</details>
+</details>
+
+<details open>
+  <summary class="section-title">Календарь ближайших событий (актуальные на 3 июля 2026 — старые события убраны) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+<table class="events-table">
+  <thead>
+    <tr><th>Дата</th><th>Событие</th><th>Важность</th><th>Что это значит (простыми словами + почему важно для золота, с пояснениями терминов)</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="date">3 июля 2026</td>
+      <td class="event">COT отчёт (данные на 30 июня)</td>
+      <td class="impact impact-medium">Средняя</td>
+      <td class="simple">
+        Официальный отчёт американского регулятора (CFTC) о том, кто сколько контрактов на золото держит (банки, хедж-фонды, производители).<br><br>
+        <strong>Простыми словами + почему:</strong> Показывает реальные ставки больших игроков. Если банки держат очень много шортов (ставок на падение цены) — это риск «short squeeze» (резкого роста цены, когда им придётся срочно закрывать позиции и покупать золото). Следи за Managed Money (хедж-фонды) — они считаются «умными деньгами».
+      </td>
+    </tr>
+    <tr>
+      <td class="date">Июль 2026 (ближайшие 1–2 недели)</td>
+      <td class="event">Следующие данные по инфляции (PCE / CPI)</td>
+      <td class="impact impact-high">Высокая</td>
+      <td class="simple">
+        Официальные отчёты по росту цен в США.<br><br>
+        <strong>Простыми словами + почему:</strong> <strong>PCE</strong> (Personal Consumption Expenditures — расходы на личное потребление) — главный показатель инфляции, на который смотрит ФРС. <strong>CPI</strong> (Consumer Price Index — индекс потребительских цен) — другой важный показатель от другого агентства. Если цифры выше ожиданий — ФРС может сильнее повышать ставку (плохо для золота). Если ниже — ФРС может быть мягче (хорошо для золота). Это один из самых сильных факторов, который может сильно «качнуть» цену.
+      </td>
+    </tr>
+    <tr>
+      <td class="date">Июль 2026</td>
+      <td class="event">Комментарии членов ФРС (включая главу и других)</td>
+      <td class="impact impact-high">Высокая</td>
+      <td class="simple">
+        Выступления и интервью руководителей Федеральной резервной системы США (ФРС — главный «банк банков» Америки, который решает процентную ставку).<br><br>
+        <strong>Простыми словами + почему:</strong> ФРС решает, будет ли ставка выше или ниже. Если говорят «мягко» («риски инфляции снизились», «можем подождать») — это плюс для золота. Если «жёстко» («инфляция слишком высокая, будем повышать ставку») — минус. Тон этих комментариев часто важнее самих цифр.
+      </td>
+    </tr>
+    <tr>
+      <td class="date">Июль — август 2026</td>
+      <td class="event">Заседания FOMC (решения по ставке)</td>
+      <td class="impact impact-high">Высокая</td>
+      <td class="simple">
+        Заседания Федерального комитета по открытым рынкам — главного органа ФРС, который принимает решения по процентной ставке.<br><br>
+        <strong>Простыми словами + почему:</strong> Это самые важные события месяца для золота. Рынок заранее «закладывает» (ожидает) вероятность повышения или снижения ставки. Чем выше вероятность повышения ставки — тем сильнее давление на золото уже сейчас (люди продают золото заранее).
+      </td>
+    </tr>
+    <tr>
+      <td class="date">Июль 2026</td>
+      <td class="event">Другие данные по экономике (PPI, розничные продажи, PMI и т.д.)</td>
+      <td class="impact impact-medium">Средняя</td>
+      <td class="simple">
+        Разные отчёты о ценах производителей (PPI), продажах в магазинах, активности заводов и компаний (PMI — индекс менеджеров по закупкам).<br><br>
+        <strong>Простыми словами + почему:</strong> Показывают, насколько сильна экономика США. Сильная экономика = ФРС может держать ставку высокой (плохо для золота). Слабая экономика = ФРС может смягчить политику (хорошо для золота). Средний по силе фактор.
+      </td>
+    </tr>
+  </tbody>
+</table>
+</details>
+
+<div class="footer-note">
+  <strong>Важно понимать формат этой таблицы.</strong> Цена сверху обновляется автоматически каждый час напрямую из публичного API — это живые данные. Подробный график движения цены теперь на отдельной странице (кнопка выше), чтобы не загромождать эту таблицу. Макро-блок, COT-блок и календарь — срез на дату последнего обновления, с объяснением каждого термина простыми словами. Никакая таблица не скажет точное время и сумму движения цены — этого не знает никто, ни алгоритм, ни банки. Чтобы обновить весь дашборд целиком — просто попроси в чате «обнови дашборд».
+</div>
+
+<details open>
+  <summary class="section-title">Что дальше на 7–14 дней (ориентир — простыми словами + почему) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+<div style="background:#14181d; border:1px solid #262b33; border-radius:10px; padding:16px 20px; margin:16px 0; font-size:13px; line-height:1.7;">
+  <strong>Что дальше на 7–14 дней (ориентир — простыми словами + почему):</strong><br><br>
+  
+  <strong>1. Ближайшие данные по инфляции (PCE / CPI) и занятости (NFP)</strong><br>
+  Это самые сильные события. <strong>PCE</strong> (Personal Consumption Expenditures — главный показатель роста цен, на который смотрит ФРС) и <strong>CPI</strong> (Consumer Price Index — другой важный индекс цен) показывают, насколько быстро растут цены. Если цифры окажутся выше ожиданий — ФРС может сильнее повышать ставку (плохо для золота). Если ниже — ФРС может быть мягче (хорошо для золота). <strong>NFP</strong> (Non-Farm Payrolls — отчёт о новых рабочих местах вне сельского хозяйства) показывает, насколько сильна экономика. Слабые цифры = меньше шансов на повышение ставки = плюс золоту. Эти данные могут сильно «качнуть» цену в одну или другую сторону.
+  
+  <br><br>
+  <strong>2. Любые комментарии членов ФРС (включая Уорша)</strong><br>
+  ФРС — это главный «банк банков» США, который решает процентную ставку. Если они говорят «мягко» («риски инфляции снизились», «можем подождать») — это плюс для золота (ставка скорее не вырастет). Если «жёстко» («инфляция слишком высокая, будем повышать ставку») — минус. Следи за тоном — он часто важнее самих цифр.
+  
+  <br><br>
+  <strong>3. Если цена золота уверенно закрепится выше 4,150–4,180</strong><br>
+  Это технический уровень сопротивления. Если цена пробьёт его и закрепится выше — шансы на продолжение роста сильно вырастут (много трейдеров начнут покупать). Если отобьётся вниз — может вернуться к снижению.
+  
+  <br><br>
+  <strong>4. Слабые данные по экономике США</strong><br>
+  Любые плохие цифры по занятости, продажам или активности компаний = сигнал, что экономика замедляется. ФРС в таком случае меньше хочет повышать ставку (или даже может её снизить) — это дополнительная поддержка для золота.
+</div>
+</details>
+
+<details open>
+  <summary class="section-title">Источники данных (чтобы ты сам мог проверить) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+<div style="background:#14181d; border:1px solid #262b33; border-radius:10px; padding:16px; margin-bottom:20px; font-size:13px; line-height:1.7;">
+  <ul style="margin:0; padding-left:20px;">
+    <li><strong>Живая цена XAU/USD</strong> — <a href="https://api.gold-api.com/price/XAU" target="_blank" style="color:#d4af37;">gold-api.com</a> (публичный API, обновляется автоматически)</li>
+    <li><strong>COT отчёт (позиции крупных игроков)</strong> — <a href="https://www.cftc.gov/dea/futures/other_sf.htm" target="_blank" style="color:#d4af37;">CFTC Disaggregated Commitments of Traders</a> (официальный регулятор США, данные еженедельно по вторникам)</li>
+    <li><strong>Inflation Nowcasting</strong> — <a href="https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting" target="_blank" style="color:#d4af37;">Federal Reserve Bank of Cleveland</a> (ежедневные предварительные оценки)</li>
+    <li><strong>PCE инфляция (официальные данные)</strong> — <a href="https://www.bea.gov/data/personal-consumption-expenditures-price-index" target="_blank" style="color:#d4af37;">Bureau of Economic Analysis (BEA)</a></li>
+    <li><strong>Core CPI, NFP и другие данные BLS</strong> — <a href="https://www.bls.gov/news.release/empsit.nr0.htm" target="_blank" style="color:#d4af37;">U.S. Bureau of Labor Statistics — Employment Situation</a></li>
+    <li><strong>Вероятность решений ФРС по ставке</strong> — <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" style="color:#d4af37;">CME FedWatch Tool</a> (рынок фьючерсов на ставку) и <a href="https://streetstats.finance/rates/fedfunds" target="_blank" style="color:#d4af37;">StreetStats — прогноз ставки</a></li>
+    <li><strong>DXY (индекс доллара), 52-недельный диапазон</strong> — <a href="https://finance.yahoo.com/quote/DX-Y.NYB/" target="_blank" style="color:#d4af37;">Yahoo Finance</a></li>
+    <li><strong>Доходность US Treasuries (10Y), 52-недельный диапазон</strong> — <a href="https://www.yieldcurve.pro/yields/10-year" target="_blank" style="color:#d4af37;">yieldcurve.pro</a> и <a href="https://fred.stlouisfed.org/series/DGS10" target="_blank" style="color:#d4af37;">FRED DGS10</a> (официальный ряд)</li>
+    <li><strong>Спрос центральных банков на золото</strong> — <a href="https://www.gold.org/goldhub/research/gold-demand-trends" target="_blank" style="color:#d4af37;">World Gold Council — Gold Demand Trends</a> (квартальные отчёты)</li>
+    <li><strong>Ормузский пролив / геополитика</strong> — <a href="https://www.bloomberg.com/news/articles/2026-07-03/strait-of-hormuz-sailors-remain-trapped-despite-iran-us-ceasefire" target="_blank" style="color:#d4af37;">Bloomberg</a>, <a href="https://en.wikipedia.org/wiki/2026_Strait_of_Hormuz_crisis" target="_blank" style="color:#d4af37;">хронология кризиса</a></li>
+    <li><strong>Экономический календарь и события</strong> — BLS, FOMC, ADP, ISM и другие официальные источники (Trading Economics, Investing.com для сводки)</li>
+    <li><strong>Геополитика и общий контекст</strong> — публичные новости и рыночные реакции (не один источник)</li>
+  </ul>
+  <p style="margin-top:12px; color:#8b929c; font-size:12px;">Все данные — из открытых официальных или публичных источников. Дашборд не даёт торговых сигналов и не является финансовой рекомендацией.</p>
+</div>
+</details>
+
+<script>
+async function fetchPrice() {
+  const priceEl = document.getElementById('livePrice');
+  const changeEl = document.getElementById('liveChange');
+  const tsEl = document.getElementById('liveTimestamp');
+  changeEl.textContent = 'обновление...';
+  try {
+    const res = await fetch('https://api.gold-api.com/price/XAU');
+    if (!res.ok) throw new Error('network');
+    const data = await res.json();
+    const price = data.price ?? data.price_usd ?? null;
+    if (price === null) throw new Error('no price field');
+    priceEl.textContent = '$' + Number(price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const now = new Date();
+    tsEl.textContent = 'источник: gold-api.com · обновлено ' + now.toLocaleTimeString('ru-RU');
+    changeEl.textContent = 'данные live';
+    changeEl.style.color = 'var(--text-dim)';
+    updateLevelDistance(Number(price));
+  } catch (e) {
+    priceEl.textContent = 'н/д';
+    changeEl.textContent = 'не удалось получить цену (проверь сеть или CORS)';
+    changeEl.style.color = 'var(--red)';
+    const distEl = document.getElementById('live-price-distance');
+    if (distEl) distEl.textContent = 'Не удалось получить текущую цену для расчёта расстояния до уровней — сверьтесь с ценой вручную.';
+  }
+}
+
+// Считает расстояние от текущей live-цены до ближайших уровней поддержки/сопротивления,
+// перечисленных в разделе "Ключевые уровни и риски". Уровни введены вручную по данным
+// нескольких источников (см. ссылки в разделе) — сам расчёт % и $ до них честный и живой.
+function updateLevelDistance(price) {
+  const distEl = document.getElementById('live-price-distance');
+  if (!distEl || !price) return;
+  const supports = [4147, 4059.5, 3961.5];   // середины зон поддержки, см. раздел выше
+  const resistances = [4198.5, 4281.5, 4300]; // середины зон сопротивления, см. раздел выше
+  const nearestSupport = supports.reduce((a, b) => Math.abs(b - price) < Math.abs(a - price) ? b : a);
+  const nearestResistance = resistances.reduce((a, b) => Math.abs(b - price) < Math.abs(a - price) ? b : a);
+  const distToSupport = ((price - nearestSupport) / price * 100).toFixed(2);
+  const distToResistance = ((nearestResistance - price) / price * 100).toFixed(2);
+  distEl.innerHTML = `Текущая цена <strong>$${price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</strong> — ` +
+    `до ближайшей поддержки <strong style="color:#d4af37;">~$${nearestSupport.toLocaleString('en-US')}</strong> (${distToSupport}%), ` +
+    `до ближайшего сопротивления <strong style="color:#3ecf8e;">~$${nearestResistance.toLocaleString('en-US')}</strong> (${distToResistance}%). ` +
+    `<span style="color:#8b929c;">Считается автоматически от live-цены, обновляется вместе с ней.</span>`;
+}
+
+fetchPrice();
+setInterval(fetchPrice, 60 * 60 * 1000);
+</script>
+</body>
+</html>
