@@ -1223,14 +1223,34 @@ function updateLevelDistance(price) {
   if (!distEl || !price) return;
   const supports = [4147, 4059.5, 3961.5];   // середины зон поддержки, см. раздел выше
   const resistances = [4198.5, 4281.5, 4300]; // середины зон сопротивления, см. раздел выше
-  const nearestSupport = supports.reduce((a, b) => Math.abs(b - price) < Math.abs(a - price) ? b : a);
-  const nearestResistance = resistances.reduce((a, b) => Math.abs(b - price) < Math.abs(a - price) ? b : a);
-  const distToSupport = ((price - nearestSupport) / price * 100).toFixed(2);
-  const distToResistance = ((nearestResistance - price) / price * 100).toFixed(2);
-  distEl.innerHTML = `Текущая цена <strong>$${price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</strong> — ` +
-    `до ближайшей поддержки <strong style="color:#d4af37;">~$${nearestSupport.toLocaleString('en-US')}</strong> (${distToSupport}%), ` +
-    `до ближайшего сопротивления <strong style="color:#3ecf8e;">~$${nearestResistance.toLocaleString('en-US')}</strong> (${distToResistance}%). ` +
-    `<span style="color:#8b929c;">Считается автоматически от live-цены, обновляется вместе с ней.</span>`;
+
+  // ИСПРАВЛЕНО: поддержка обязана быть НИЖЕ текущей цены, сопротивление — ВЫШЕ.
+  // Раньше брался просто ближайший по модулю уровень, из-за чего уровень
+  // ВЫШЕ цены мог ошибочно попасть в "поддержку" (нашли этот баг вживую).
+  const supportsBelow = supports.filter(s => s <= price);
+  const resistancesAbove = resistances.filter(r => r >= price);
+
+  const nearestSupport = supportsBelow.length ? Math.max(...supportsBelow) : null;
+  const nearestResistance = resistancesAbove.length ? Math.min(...resistancesAbove) : null;
+
+  let html = `Текущая цена <strong>$${price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</strong> — `;
+
+  if (nearestSupport !== null) {
+    const distToSupport = ((price - nearestSupport) / price * 100).toFixed(2);
+    html += `до ближайшей поддержки <strong style="color:#d4af37;">~$${nearestSupport.toLocaleString('en-US')}</strong> (${distToSupport}%), `;
+  } else {
+    html += `цена уже ниже всех известных уровней поддержки из списка — новых ориентиров снизу нет, `;
+  }
+
+  if (nearestResistance !== null) {
+    const distToResistance = ((nearestResistance - price) / price * 100).toFixed(2);
+    html += `до ближайшего сопротивления <strong style="color:#3ecf8e;">~$${nearestResistance.toLocaleString('en-US')}</strong> (${distToResistance}%). `;
+  } else {
+    html += `цена уже выше всех известных уровней сопротивления из списка — новых ориентиров сверху нет. `;
+  }
+
+  html += `<span style="color:#8b929c;">Считается автоматически от live-цены, обновляется вместе с ней.</span>`;
+  distEl.innerHTML = html;
 }
 
 fetchPrice();
