@@ -357,7 +357,7 @@
 
 <!-- ================= КЛЮЧЕВЫЕ УРОВНИ И РИСКИ ================= -->
 <details open id="levels-risks">
-  <summary class="section-title">🎯 Ключевые уровни и риски (простыми словами) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 6 июля 2026 20:15:00)</span></summary>
+  <summary class="section-title">🎯 Ключевые уровни и риски (простыми словами) <span style="font-size:11px; color:#8b929c; font-weight:400;">(данные на 10 июля 2026)</span></summary>
 <div style="background:#1a1f26; border:2px solid #d4af37; border-radius:12px; padding:18px 22px; margin-bottom:20px;">
 
   <p style="font-size:12px; color:var(--text-dim); line-height:1.6; background:#14181e; border:1px solid #3a414d; border-radius:8px; padding:10px 12px; margin-bottom:16px;">
@@ -372,23 +372,22 @@
     <div>
       <div style="font-weight:600; color:#d4af37; margin-bottom:8px;">📉 Поддержки (куда может упасть)</div>
       <ul style="margin:0; padding-left:18px; font-size:14px; line-height:1.7;">
-        <li><strong>~4,144–4,150</strong> — ближайшая, по внутридневному сетапу (TradingView/OANDA, 5 июля): пробой вниз = сигнал на продажу</li>
-        <li><strong>~4,059–4,060</strong> — следующая, совпадает у двух источников (LiteFinance, TradingView SMC-анализ, 5-6 июля)</li>
-        <li><strong>~3,960–3,963</strong> — сильная зона, тестировалась 3 раза подряд (Intellectia, OANDA, 4-5 июля) — самая "согласованная" поддержка среди источников</li>
+        <li><strong>~4,080–4,090</strong> — ближайшая, несколько источников сходятся (OANDA/TradingView, SMC-анализ, 9 июля)</li>
+        <li><strong>~4,040–4,050</strong> — следующая (OANDA, 9 июля)</li>
       </ul>
+      <p style="font-size:11px; color:#8b929c; margin-top:6px;">Уровень ~3,960 из прошлой сверки (6 июля) в свежих источниках больше не встречается — цена туда не опускалась последние дни, актуальность не подтверждена, убрал.</p>
     </div>
     <div>
       <div style="font-weight:600; color:#3ecf8e; margin-bottom:8px;">📈 Сопротивления (куда может вырасти)</div>
       <ul style="margin:0; padding-left:18px; font-size:14px; line-height:1.7;">
-        <li><strong>~4,195–4,202</strong> — ближайшее, пробой вверх = сигнал на покупку (TradingView/OANDA, LiteFinance)</li>
-        <li><strong>~4,250–4,313</strong> — следующая зона при продолжении роста (LiteFinance, TradingView SMC)</li>
-        <li><strong>~4,300</strong> — более консервативная оценка сопротивления (Intellectia)</li>
+        <li><strong>~4,140–4,150</strong> — ближайшее, несколько источников сходятся (Brisk Markets, OANDA, 7-9 июля)</li>
+        <li><strong>~4,180–4,200</strong> — следующая зона (Brisk Markets, 6-9 июля)</li>
       </ul>
     </div>
   </div>
 
   <p style="font-size:11px; color:#8b929c; margin-top:10px;">
-    <strong>Источники (проверьте сами и сравните с моей выжимкой):</strong> <a href="https://www.barchart.com/forex/quotes/%5EXAUUSD/cheat-sheet" target="_blank" rel="noopener">Barchart — Trader's Cheat Sheet</a> (живой расчёт пивотов, обновляется каждую сессию — самый объективный вариант, так как считается по формуле, а не "на глаз") · <a href="https://www.tradingview.com/symbols/XAUUSD/ideas/" target="_blank" rel="noopener">TradingView — свежие идеи по XAUUSD</a> · <a href="https://www.litefinance.org/blog/analysts-opinions/gold-price-prediction-forecast/daily-and-weekly/" target="_blank" rel="noopener">LiteFinance — дневной технический разбор</a>
+    <strong>Источники (проверьте сами и сравните с моей выжимкой):</strong> <a href="https://www.barchart.com/forex/quotes/%5EXAUUSD/cheat-sheet" target="_blank" rel="noopener">Barchart — Trader's Cheat Sheet</a> (живой расчёт пивотов, обновляется каждую сессию — самый объективный вариант, так как считается по формуле, а не "на глаз") · <a href="https://www.tradingview.com/symbols/XAUUSD/ideas/" target="_blank" rel="noopener">TradingView — свежие идеи по XAUUSD</a> · <a href="https://www.briskmarkets.com/blog/" target="_blank" rel="noopener">Brisk Markets — технический разбор</a>
   </p>
 
   <div style="margin-top:16px; padding-top:14px; border-top:1px solid #262b33;">
@@ -1221,8 +1220,8 @@ async function fetchPrice() {
 function updateLevelDistance(price) {
   const distEl = document.getElementById('live-price-distance');
   if (!distEl || !price) return;
-  const supports = [4147, 4059.5, 3961.5];   // середины зон поддержки, см. раздел выше
-  const resistances = [4198.5, 4281.5, 4300]; // середины зон сопротивления, см. раздел выше
+  const supports = [4085, 4045];   // середины зон поддержки на 10 июля, см. раздел выше
+  const resistances = [4145, 4190]; // середины зон сопротивления на 10 июля, см. раздел выше
 
   // ИСПРАВЛЕНО: поддержка обязана быть НИЖЕ текущей цены, сопротивление — ВЫШЕ.
   // Раньше брался просто ближайший по модулю уровень, из-за чего уровень
