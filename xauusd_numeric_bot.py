@@ -82,16 +82,27 @@ def is_market_closed() -> bool:
 # ============================================================
 # 1. ЦЕНА ЗОЛОТА (gold-api.com — уже проверенный источник в проекте)
 # ============================================================
-def fetch_gold_price():
-    try:
-        r = requests.get("https://api.gold-api.com/price/XAU", timeout=15)
-        r.raise_for_status()
-        data = r.json()
-        price = data.get("price") or data.get("price_usd")
-        return float(price) if price is not None else None
-    except Exception as e:
-        print(f"[WARN] Не удалось получить цену золота: {e}")
-        return None
+def fetch_gold_price(max_retries=3, delay_seconds=5):
+    """С повторными попытками — единичный сетевой сбой (например, разовый
+    DNS-глюк у раннера GitHub Actions, как было 12.07.2026) не должен
+    оставлять сводку без цены."""
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            r = requests.get("https://api.gold-api.com/price/XAU", timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            price = data.get("price") or data.get("price_usd")
+            if price is not None:
+                return float(price)
+            last_error = "в ответе API нет поля price"
+        except Exception as e:
+            last_error = e
+        print(f"[WARN] Попытка {attempt}/{max_retries} получить цену золота не удалась: {last_error}")
+        if attempt < max_retries:
+            time.sleep(delay_seconds)
+    print(f"[WARN] Все {max_retries} попытки получить цену золота не удались. Последняя ошибка: {last_error}")
+    return None
 
 
 # ============================================================
