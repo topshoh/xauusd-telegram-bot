@@ -503,9 +503,13 @@ def send_telegram_message(text: str):
 
 
 def main():
-    if is_market_closed():
-        print("Рынок закрыт (выходные) — сообщение не отправляется.")
+    force_test = os.environ.get("FORCE_TEST_RUN", "").lower() == "true"
+    if is_market_closed() and not force_test:
+        print("Рынок закрыт (выходные) — сообщение не отправляется. "
+              "(Чтобы протестировать в выходной, запустите workflow с FORCE_TEST_RUN=true.)")
         return
+    if force_test:
+        print("⚠️ FORCE_TEST_RUN включён — игнорирую проверку на закрытый рынок (тестовый прогон).")
 
     # Собираем все сообщения-кандидаты: сначала напоминания (важные, идут первыми),
     # затем полную сводку — но только по понедельникам либо когда есть хотя бы
