@@ -53,6 +53,17 @@ BEA_API_KEY = os.environ.get("BEA_API_KEY")
 
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
+# ============================================================
+# КАЛЕНДАРЬ ДЛЯ БОЛЬШИХ НАПОМИНАНИЙ (заглавными буквами в Telegram)
+# Обновлять вручную по мере появления новых подтверждённых дат.
+# ============================================================
+REMINDER_EVENTS = [
+    {"date": "2026-07-14", "label": "CPI за июнь (BLS)"},
+    {"date": "2026-07-28", "label": "FOMC — решение по ставке, день 1"},
+    {"date": "2026-07-29", "label": "FOMC — решение + пресс-конференция"},
+    {"date": "2026-07-30", "label": "PCE за июнь (BEA) — самое важное событие месяца"},
+]
+
 
 def is_market_closed() -> bool:
     """Рынок золота закрыт с субботы 02:00 до понедельника 03:00 по Ташкенту
@@ -243,6 +254,54 @@ def fetch_cot_gold():
 # ============================================================
 # СБОРКА СООБЩЕНИЯ
 # ============================================================
+
+# ============================================================
+# БОЛЬШИЕ НАПОМИНАНИЯ (заглавными буквами) — про важные даты и про
+# гигиену GitHub-токена. Не требуют state-файла: просто математика дат.
+# ============================================================
+def build_event_reminders():
+    today = datetime.now(TASHKENT_TZ).date()
+    reminders = []
+    for event in REMINDER_EVENTS:
+        event_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
+        days_until = (event_date - today).days
+        label_upper = event["label"].upper()
+        if 0 < days_until <= 3:
+            reminders.append(
+                f"⚠️ <b>ЧЕРЕЗ {days_until} ДН. ВЫХОДИТ: {label_upper}</b>\n"
+                f"Дата: {event_date.strftime('%d.%m.%Y')}\n\n"
+                f"ПОСЛЕ ВЫХОДА ЭТИХ ДАННЫХ СТОИТ ПОПРОСИТЬ «ОБНОВИ ДАШБОРД»."
+            )
+        elif -2 <= days_until <= 0:
+            reminders.append(
+                f"🔔 <b>{label_upper} УЖЕ ВЫШЕЛ</b> ({event_date.strftime('%d.%m.%Y')})\n\n"
+                f"ЕСЛИ ЕЩЁ НЕ ПРОСИЛИ ОБНОВИТЬ ДАШБОРД — СЕЙЧАС САМОЕ ВРЕМЯ."
+            )
+    return reminders
+
+
+def build_token_hygiene_reminder():
+    """Раз в месяц (1 числа) — напоминание проверить GitHub-токен."""
+    today = datetime.now(TASHKENT_TZ).date()
+    if today.day == 1:
+        return (
+            f"🔐 <b>ЕЖЕМЕСЯЧНОЕ НАПОМИНАНИЕ: ПРОВЕРЬТЕ GITHUB-ТОКЕН</b>\n\n"
+            f"Зайдите в Settings → Developer settings → Personal access tokens "
+            f"и убедитесь, что токен ещё нужен, не истёк и не выдан с более "
+            f"широкими правами, чем требуется (для этого проекта достаточно "
+            f"Contents: Read/write)."
+        )
+    return None
+
+
+def is_full_report_day():
+    """Полную сводку из 7 сообщений шлём по понедельникам — в остальные
+    дни бот только проверяет напоминания (см. main()), чтобы не спамить
+    одними и теми же цифрами каждый день."""
+    today = datetime.now(TASHKENT_TZ)
+    return today.weekday() == 0  # 0 = понедельник
+
+
 # ============================================================
 # СБОРКА СООБЩЕНИЙ — "ДЛЯ ШКОЛЬНИКА", ПО 5 ПУНКТАМ НА КАЖДЫЙ ПОКАЗАТЕЛЬ
 # (перевод названия → откуда цифра и что значит → кто считает и как →
@@ -447,7 +506,29 @@ def main():
     if is_market_closed():
         print("Рынок закрыт (выходные) — сообщение не отправляется.")
         return
-    messages = build_messages()
+
+    # Собираем все сообщения-кандидаты: сначала напоминания (важные, идут первыми),
+    # затем полную сводку — но только по понедельникам либо когда есть хотя бы
+    # одно напоминание (иначе бот молчит, чтобы не спамить).
+    messages = []
+
+    event_reminders = build_event_reminders()
+    messages.extend(event_reminders)
+
+    token_reminder = build_token_hygiene_reminder()
+    if token_reminder:
+        messages.append(token_reminder)
+
+    full_report_triggered = is_full_report_day() or len(event_reminders) > 0
+    if full_report_triggered:
+        messages.extend(build_messages())
+    else:
+        print("Не понедельник и нет напоминаний рядом — сегодня бот молчит (это ожидаемо, не баг).")
+
+    if not messages:
+        print("Сообщений к отправке нет.")
+        return
+
     print(f"---- Сформировано {len(messages)} сообщений ----")
     sent_count = 0
     for i, msg in enumerate(messages, start=1):
