@@ -211,15 +211,22 @@ def fetch_bls_series(series_id: str, n_points: int = 2):
 
 def fetch_cpi_yoy():
     """CPI год к году — берём текущую и точку 12 месяцев назад и считаем % сами,
-    так как BLS отдаёт индекс, а не готовый % изменения."""
-    points = fetch_bls_series("CUUR0000SA0", n_points=13)
-    if len(points) < 13:
+    так как BLS отдаёт индекс, а не готовый % изменения. Дополнительно
+    считаем CPI год к году МЕСЯЦ НАЗАД (точки [1] и [13]) — чтобы можно
+    было показать "было X%, стало Y%" для сравнения."""
+    points = fetch_bls_series("CUUR0000SA0", n_points=14)
+    if len(points) < 14:
         return None
     latest = float(points[0]["value"])
     year_ago = float(points[12]["value"])
     yoy = (latest - year_ago) / year_ago * 100
+
+    prev_month = float(points[1]["value"])
+    prev_year_ago = float(points[13]["value"])
+    prev_yoy = (prev_month - prev_year_ago) / prev_year_ago * 100
+
     period_label = f"{points[0]['periodName']} {points[0]['year']}"
-    return round(yoy, 2), period_label
+    return round(yoy, 2), period_label, round(prev_yoy, 2)
 
 
 def fetch_nfp_change():
@@ -359,10 +366,10 @@ def classify_yield(latest, prev):
         return None
     diff = latest - prev
     if diff > 0.02:
-        return "bearish", f"выросла с {prev:.2f}% до {latest:.2f}%"
+        return "bearish", f"выросла до {latest:.2f}% (с {prev:.2f}%) — деньги уходят в облигации"
     elif diff < -0.02:
-        return "bullish", f"упала с {prev:.2f}% до {latest:.2f}%"
-    return "neutral", f"почти не изменилась ({prev:.2f}% → {latest:.2f}%)"
+        return "bullish", f"упала до {latest:.2f}% (с {prev:.2f}%) — облигации менее выгодны"
+    return "neutral", f"почти без изменений ({latest:.2f}%)"
 
 
 def classify_dxy(latest, prev):
@@ -372,10 +379,10 @@ def classify_dxy(latest, prev):
         return None
     diff_pct = (latest - prev) / prev * 100
     if diff_pct > 0.15:
-        return "bearish", f"вырос на {diff_pct:.2f}%"
+        return "bearish", f"вырос на {diff_pct:.2f}% ({latest:.1f}) — золото дороже для мира"
     elif diff_pct < -0.15:
-        return "bullish", f"упал на {abs(diff_pct):.2f}%"
-    return "neutral", f"почти не изменился ({diff_pct:+.2f}%)"
+        return "bullish", f"упал на {abs(diff_pct):.2f}% ({latest:.1f}) — золото дешевле для мира"
+    return "neutral", f"почти без изменений ({latest:.1f})"
 
 
 def classify_nfp(value):
@@ -384,10 +391,10 @@ def classify_nfp(value):
     if value is None:
         return None
     if value < 100:
-        return "bullish", "заметно ниже нормы (обычно 100-150 тыс.)"
+        return "bullish", f"+{value}К, мало — слабая экономика, ФРС смягчится"
     elif value > 150:
-        return "bearish", "выше нормы (обычно 100-150 тыс.)"
-    return "neutral", "в пределах обычной нормы (100-150 тыс.)"
+        return "bearish", f"+{value}К, много — сильная экономика, ФРС жёстче"
+    return "neutral", f"+{value}К, в пределах нормы"
 
 
 def classify_cot(long_pos, short_pos):
@@ -400,14 +407,15 @@ def classify_cot(long_pos, short_pos):
         return None
     long_share = long_pos / total * 100
     if long_share > 70:
-        return "bullish", f"фонды в основном в лонге ({long_share:.0f}%)"
+        return "bullish", f"{long_share:.0f}% в лонге — крупные игроки скупают золото"
     elif long_share < 30:
-        return "bearish", f"фонды в основном в шорте ({long_share:.0f}%)"
-    return "neutral", f"позиции примерно сбалансированы ({long_share:.0f}% в лонге)"
+        return "bearish", f"{long_share:.0f}% в лонге — крупные игроки распродают"
+    return "neutral", f"{long_share:.0f}% в лонге — позиции сбалансированы"
 
 
 VERDICT_EMOJI = {"bullish": "🟢", "bearish": "🔴", "neutral": "🟡"}
 VERDICT_LABEL = {"bullish": "Бычий", "bearish": "Медвежий", "neutral": "Нейтральный"}
+REACTION_TAG = {"bullish": "золото растёт", "bearish": "золото падает", "neutral": "эффект смешанный"}
 
 
 def build_messages():
@@ -437,37 +445,37 @@ def build_messages():
     yield_verdict = classify_yield(real_yield, real_prev)
     if yield_verdict:
         v, reason = yield_verdict
-        factors.append(("Доходность облигаций (с поправкой на инфляцию)",
-                         f"{real_yield:.2f}%", v, reason))
+        factors.append(("Доходность облигаций", v, reason))
 
     dxy_verdict = classify_dxy(dxy, dxy_prev)
     if dxy_verdict:
         v, reason = dxy_verdict
-        factors.append(("Индекс доллара (широкий, ФРС)", f"{dxy:.1f}", v, reason))
+        factors.append(("Доллар", v, reason))
 
     nfp_verdict = classify_nfp(nfp[0]) if nfp else None
     if nfp_verdict:
         v, reason = nfp_verdict
-        factors.append(("Рабочие места (NFP)", f"+{nfp[0]} тыс.", v, reason))
+        factors.append(("Рабочие места", v, reason))
 
     cot_verdict = classify_cot(mm_long, mm_short)
     if cot_verdict:
         v, reason = cot_verdict
-        factors.append(("Хедж-фонды (COT)", f"Long {mm_long:,} / Short {mm_short:,}", v, reason))
+        factors.append(("Хедж-фонды", v, reason))
 
     # CPI и PCE — намеренно всегда нейтральные: инфляция двулика для золота
     # (давит на ставку, но золото же и защита от инфляции), не форсируем
     # ложную однозначность
     if cpi:
-        factors.append(("Инфляция CPI", f"{cpi[0]}%", "neutral",
-                         "двойной эффект — давит на ставку, но золото и защита от инфляции"))
+        cpi_val, _, cpi_prev = cpi
+        factors.append(("CPI", "neutral",
+                         f"{cpi_val}% (было {cpi_prev}%) — двойной эффект: давит на ставку ФРС, но золото и защита от инфляции"))
     if pce:
-        factors.append(("Инфляция PCE", f"{pce[0]}%", "neutral",
-                         "двойной эффект, как и CPI"))
+        pce_val, _ = pce
+        factors.append(("PCE", "neutral", f"{pce_val}% — тот же двойной эффект"))
 
-    bullish = [f for f in factors if f[2] == "bullish"]
-    bearish = [f for f in factors if f[2] == "bearish"]
-    neutral = [f for f in factors if f[2] == "neutral"]
+    bullish = [f for f in factors if f[1] == "bullish"]
+    bearish = [f for f in factors if f[1] == "bearish"]
+    neutral = [f for f in factors if f[1] == "neutral"]
 
     if len(bullish) > len(bearish):
         tilt_label, tilt_emoji = "БЫЧИЙ", "🟢"
@@ -485,16 +493,16 @@ def build_messages():
 
     if bullish:
         lines.append(f"\n🟢 <b>Бычьи ({len(bullish)}):</b>")
-        for name, val, _, reason in bullish:
-            lines.append(f"• {name}: {val} — {reason}")
+        for name, v, reason in bullish:
+            lines.append(f"• {name} {reason} → <b>{REACTION_TAG[v]}</b>")
     if bearish:
         lines.append(f"\n🔴 <b>Медвежьи ({len(bearish)}):</b>")
-        for name, val, _, reason in bearish:
-            lines.append(f"• {name}: {val} — {reason}")
+        for name, v, reason in bearish:
+            lines.append(f"• {name} {reason} → <b>{REACTION_TAG[v]}</b>")
     if neutral:
         lines.append(f"\n🟡 <b>Нейтральные ({len(neutral)}):</b>")
-        for name, val, _, reason in neutral:
-            lines.append(f"• {name}: {val} — {reason}")
+        for name, v, reason in neutral:
+            lines.append(f"• {name} {reason} → {REACTION_TAG[v]}")
 
     lines.append(f"\n📌 Дашборд: https://topshoh.github.io/xauusd-telegram-bot/dashboard.html")
     lines.append(f"💰 Цена: <b>{price_str}</b>")
