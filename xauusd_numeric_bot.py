@@ -8,16 +8,18 @@ xauusd_numeric_bot.py
 
 ЧТО ЭТОТ БОТ УМЕЕТ САМ, БЕЗ ЧЕЛОВЕКА И БЕЗ ИИ:
   - Живая цена золота (gold-api.com)
-  - Номинальная и реальная (TIPS) доходность 10-летних облигаций (FRED)
-  - Последние факт/прогноз по CPI, NFP, PCE (BLS + BEA)
+  - Реальная (TIPS) доходность 10-летних облигаций (FRED)
+  - Широкий индекс доллара (FRED, DTWEXBGS — честный аналог DXY, не сам DXY)
+  - Последние факт/прогноз по CPI, NFP (BLS), PCE (FRED PCEPI)
   - Последний отчёт COT по золоту (CFTC, Socrata API)
+  - Автоматическая классификация каждого фактора на Бычий/Медвежий/
+    Нейтральный на основе реального сравнения с предыдущей точкой
+    (не выдуманных чисел — см. функции classify_*)
 
 ЧЕГО ЭТОТ БОТ НЕ ДЕЛАЕТ (осознанно, чтобы не выдумывать):
   - Не считает "вероятность решения ФРС" (нет бесплатного API у CME FedWatch)
-  - Не пишет вердикт/анализ/интерпретацию — только сырые цифры с подписанными
-    источниками. Синтез "бычий/медвежий счёт" по-прежнему делает человек
-    через чат с Claude, либо это отдельная (платная) надстройка поверх
-    этого бота, если её решат добавить позже.
+  - Не даёт сигналов BUY/SELL и не прогнозирует цену — только счёт факторов
+    ("уклон") как контекст, явно помечено что это не рекомендация
 
 НУЖНЫЕ СЕКРЕТЫ (задаются в GitHub Secrets репозитория, см. ниже список):
   TELEGRAM_BOT_TOKEN   - токен бота от @BotFather
@@ -25,7 +27,12 @@ xauusd_numeric_bot.py
   FRED_API_KEY         - бесплатный ключ https://fred.stlouisfed.org/docs/api/api_key.html
   BLS_API_KEY          - бесплатный ключ https://www.bls.gov/developers/home.htm (не обязателен,
                           но без ключа лимит намного ниже и без него часто падает)
-  BEA_API_KEY          - бесплатный ключ https://apps.bea.gov/api/signup/
+
+ИСТОРИЯ ИЗМЕНЕНИЙ:
+  14.07.2026 — убран BEA_API_KEY (PCE теперь через FRED, надёжнее и без
+  риска перепутать номер строки в таблице), добавлен DXY-прокси, добавлена
+  классификация факторов на бычьи/медвежьи/нейтральные с реальными
+  сравнениями вместо единого текстового сообщения по каждому показателю.
 
 ВАЖНО ПРО ЭТОТ ФАЙЛ:
   Я (Claude) не могу протестировать этот скрипт "живьём" в этом чате — у
@@ -49,7 +56,6 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 FRED_API_KEY = os.environ.get("FRED_API_KEY")
 BLS_API_KEY = os.environ.get("BLS_API_KEY", "")  # опционален, но лучше иметь
-BEA_API_KEY = os.environ.get("BEA_API_KEY")
 
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
@@ -106,37 +112,73 @@ def fetch_gold_price(max_retries=3, delay_seconds=5):
 
 
 # ============================================================
-# 2. ДОХОДНОСТИ ОБЛИГАЦИЙ (FRED — официальный API Федерального резервного банка Сент-Луиса)
-#    DGS10  = номинальная доходность 10-летних Treasury
-#    DFII10 = реальная доходность 10-летних TIPS
+# 2. ДОХОДНОСТИ ОБЛИГАЦИЙ И ДОЛЛАР (FRED — официальный API ФРБ Сент-Луиса)
+#    DGS10     = номинальная доходность 10-летних Treasury
+#    DFII10    = реальная доходность 10-летних TIPS
+#    DTWEXBGS  = широкий индекс доллара ФРС (не то же самое, что ICE DXY,
+#                который смотрят трейдеры, но честный бесплатный аналог —
+#                называем его прямо так, без вранья про "это DXY")
 # ============================================================
-def fetch_fred_series(series_id: str):
+def fetch_fred_series(series_id: str, lookback_points: int = 22):
+    """Возвращает (текущее_значение, дата, значение_около_месяца_назад).
+    lookback_points=22 — примерно месяц торговых дней назад для дневных
+    рядов (DGS10, DFII10); для месячных рядов (DTWEXBGS) это может
+    захватить больше одного периода, но нам достаточно "предыдущая
+    доступная точка" для сравнения направления."""
     if not FRED_API_KEY:
         print(f"[WARN] FRED_API_KEY не задан, пропускаю {series_id}")
-        return None, None
+        return None, None, None
     url = "https://api.stlouisfed.org/fred/series/observations"
     params = {
         "series_id": series_id,
         "api_key": FRED_API_KEY,
         "file_type": "json",
         "sort_order": "desc",
-        "limit": 1,
+        "limit": lookback_points,
     }
     try:
         r = requests.get(url, params=params, timeout=15)
         r.raise_for_status()
-        obs = r.json().get("observations", [])
+        obs = [o for o in r.json().get("observations", []) if o.get("value") != "."]
         if not obs:
-            return None, None
-        latest = obs[0]
-        value = latest.get("value")
-        date = latest.get("date")
-        if value == ".":  # FRED так помечает пропуски (выходные/праздники)
-            return None, date
-        return float(value), date
+            return None, None, None
+        latest_val = float(obs[0]["value"])
+        latest_date = obs[0]["date"]
+        prev_val = float(obs[-1]["value"]) if len(obs) > 1 else None
+        return latest_val, latest_date, prev_val
     except Exception as e:
         print(f"[WARN] Не удалось получить {series_id} из FRED: {e}")
-        return None, None
+        return None, None, None
+
+
+def fetch_fred_yoy(series_id: str, n_points: int = 13):
+    """Год к году — берём точку сейчас и точку 12 периодов назад (для
+    месячных рядов вроде PCEPI это ровно 12 месяцев) и считаем % сами."""
+    if not FRED_API_KEY:
+        print(f"[WARN] FRED_API_KEY не задан, пропускаю {series_id}")
+        return None
+    url = "https://api.stlouisfed.org/fred/series/observations"
+    params = {
+        "series_id": series_id,
+        "api_key": FRED_API_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": n_points,
+    }
+    try:
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        obs = [o for o in r.json().get("observations", []) if o.get("value") != "."]
+        if len(obs) < n_points:
+            print(f"[WARN] Недостаточно точек для YoY по {series_id}: получено {len(obs)}, нужно {n_points}")
+            return None
+        latest = float(obs[0]["value"])
+        year_ago = float(obs[n_points - 1]["value"])
+        yoy = (latest - year_ago) / year_ago * 100
+        return round(yoy, 2), obs[0]["date"]
+    except Exception as e:
+        print(f"[WARN] Не удалось получить YoY для {series_id} из FRED: {e}")
+        return None
 
 
 # ============================================================
@@ -202,43 +244,31 @@ def fetch_nfp_change():
 # 4. PCE (BEA — Bureau of Economic Analysis, официальный API)
 # ============================================================
 def fetch_pce_yoy():
-    """PCE год к году. Таблица T20804 отдаёт уровень индекса цен (не готовый
-    %), поэтому берём точку сейчас и точку 12 месяцев назад и считаем %
-    сами — тем же способом, что и для CPI выше. LineNumber="1" — это
-    headline PCE (расходы в целом, не Core). ВАЖНО: как и с NFP, я не смог
-    протестировать это вживую без вашего реального BEA-ключа — при первом
-    запуске сверьте результат с официальной цифрой (например, с сайта
-    bea.gov) и напишите мне, если разойдётся."""
-    if not BEA_API_KEY:
-        print("[WARN] BEA_API_KEY не задан, пропускаю PCE")
-        return None
-    url = "https://apps.bea.gov/api/data"
-    params = {
-        "UserID": BEA_API_KEY,
-        "method": "GetData",
-        "datasetname": "NIPA",
-        "TableName": "T20804",
-        "LineNumber": "1",
-        "Frequency": "M",
-        "Year": "X",
-        "ResultFormat": "JSON",
-    }
-    try:
-        r = requests.get(url, params=params, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        rows = data["BEAAPI"]["Results"]["Data"]
-        rows_sorted = sorted(rows, key=lambda x: x["TimePeriod"], reverse=True)
-        if len(rows_sorted) < 13:
-            return None
-        latest_val = float(rows_sorted[0]["DataValue"].replace(",", ""))
-        year_ago_val = float(rows_sorted[12]["DataValue"].replace(",", ""))
-        yoy = (latest_val - year_ago_val) / year_ago_val * 100
-        period_label = rows_sorted[0]["TimePeriod"]
-        return round(yoy, 2), period_label
-    except Exception as e:
-        print(f"[WARN] Не удалось получить PCE из BEA: {e}")
-        return None
+    """PCE год к году — headline (общий).
+
+    ИСПРАВЛЕНО: раньше брал таблицу BEA T20804 с LineNumber=1, предполагая,
+    что это headline-агрегат — но реальный тестовый прогон 13.07.2026 дал
+    -4.02%, что явно неправдоподобно (настоящий headline PCE положительный,
+    около +4%). Судя по всему, LineNumber=1 в этой таблице — не общий
+    показатель, а конкретная подкатегория (например, товары длительного
+    пользования, где дефляция — обычное дело, отсюда и минус). Вместо того
+    чтобы гадать правильный номер строки, переключился на FRED — у них есть
+    прямой, однозначный ряд PCEPI (тот же показатель ФРС, что публикует
+    BEA, просто уже без риска перепутать категорию), и FRED уже проверенно
+    работает в этом боте для доходностей."""
+    return fetch_fred_yoy("PCEPI")
+
+
+def fetch_dxy_proxy():
+    """Индекс доллара — через FRED (DTWEXBGS, Nominal Broad U.S. Dollar
+    Index). ВАЖНО: это НЕ тот же самый ICE DXY, который обычно смотрят
+    трейдеры (у него нет бесплатного API) — это отдельный, тоже официальный
+    и реальный индекс от ФРС, но с другой корзиной валют. Называем его
+    честно "широкий индекс доллара (ФРС)", а не "DXY", чтобы не повторить
+    ошибку с "выдачей за то, чем это не является". Обновляется раз в
+    рабочий день."""
+    latest, date, prev = fetch_fred_series("DTWEXBGS", lookback_points=10)
+    return latest, date, prev
 
 
 # ============================================================
@@ -314,55 +344,163 @@ def is_full_report_day():
 
 
 # ============================================================
-# СБОРКА СООБЩЕНИЯ — КОРОТКО И ПО ДЕЛУ
-# (по просьбе пользователя: раньше было 7 подробных сообщений с 5-пунктовым
-# разбором на каждый показатель — оказалось слишком много текста для
-# ежедневного использования. Теперь один компактный пост с цифрами и
-# ссылкой на дашборд, где подробности всё ещё доступны при желании.)
+# СБОРКА СООБЩЕНИЯ — С ГРУППИРОВКОЙ ПО БЫЧЬИ/МЕДВЕЖЬИ/НЕЙТРАЛЬНЫЕ
+# Каждый фактор классифицируется на основе РЕАЛЬНОГО сравнения с
+# предыдущей точкой (не выдуманных чисел) — см. классификаторы ниже.
+# Пороги для NFP/COT — простые, объяснённые прямо в тексте сообщения,
+# не выдаются за точную науку.
 # ============================================================
+
+def classify_yield(latest, prev):
+    """Реальная доходность облигаций: растёт -> медвежий (конкурент золота
+    сильнее), падает -> бычий. Порог 0.02 п.п., чтобы шум не считался
+    движением."""
+    if latest is None or prev is None:
+        return None
+    diff = latest - prev
+    if diff > 0.02:
+        return "bearish", f"выросла с {prev:.2f}% до {latest:.2f}%"
+    elif diff < -0.02:
+        return "bullish", f"упала с {prev:.2f}% до {latest:.2f}%"
+    return "neutral", f"почти не изменилась ({prev:.2f}% → {latest:.2f}%)"
+
+
+def classify_dxy(latest, prev):
+    """Индекс доллара: растёт -> медвежий для золота (доллар крепче,
+    золото дороже для остального мира), падает -> бычий."""
+    if latest is None or prev is None:
+        return None
+    diff_pct = (latest - prev) / prev * 100
+    if diff_pct > 0.15:
+        return "bearish", f"вырос на {diff_pct:.2f}%"
+    elif diff_pct < -0.15:
+        return "bullish", f"упал на {abs(diff_pct):.2f}%"
+    return "neutral", f"почти не изменился ({diff_pct:+.2f}%)"
+
+
+def classify_nfp(value):
+    """NFP: мало новых рабочих мест -> бычий (слабая экономика, ФРС мягче),
+    много -> медвежий. Пороги условные, обычная норма ~100-150K."""
+    if value is None:
+        return None
+    if value < 100:
+        return "bullish", "заметно ниже нормы (обычно 100-150 тыс.)"
+    elif value > 150:
+        return "bearish", "выше нормы (обычно 100-150 тыс.)"
+    return "neutral", "в пределах обычной нормы (100-150 тыс.)"
+
+
+def classify_cot(long_pos, short_pos):
+    """COT: сильный перевес в лонг -> бычий (но с оговоркой про риск
+    перегрева, см. текст ниже)."""
+    if long_pos is None or short_pos is None:
+        return None
+    total = long_pos + short_pos
+    if total == 0:
+        return None
+    long_share = long_pos / total * 100
+    if long_share > 70:
+        return "bullish", f"фонды в основном в лонге ({long_share:.0f}%)"
+    elif long_share < 30:
+        return "bearish", f"фонды в основном в шорте ({long_share:.0f}%)"
+    return "neutral", f"позиции примерно сбалансированы ({long_share:.0f}% в лонге)"
+
+
+VERDICT_EMOJI = {"bullish": "🟢", "bearish": "🔴", "neutral": "🟡"}
+VERDICT_LABEL = {"bullish": "Бычий", "bearish": "Медвежий", "neutral": "Нейтральный"}
+
+
 def build_messages():
     now_str = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y %H:%M")
 
     price = fetch_gold_price()
     price_str = f"${price:,.2f}" if price else "н/д"
 
-    nominal, _ = fetch_fred_series("DGS10")
-    real, _ = fetch_fred_series("DFII10")
-    nominal_str = f"{nominal:.2f}%" if nominal else "н/д"
-    real_str = f"{real:.2f}%" if real else "н/д"
-
+    real_yield, real_date, real_prev = fetch_fred_series("DFII10")
+    dxy, dxy_date, dxy_prev = fetch_dxy_proxy()
     cpi = fetch_cpi_yoy()
-    cpi_str = f"{cpi[0]}%" if cpi else "н/д"
-
     nfp = fetch_nfp_change()
-    nfp_str = f"{nfp[0]:+,}K" if nfp else "н/д"
-
     pce = fetch_pce_yoy()
-    pce_str = f"{pce[0]}%" if pce else "н/д"
-
     cot = fetch_cot_gold()
-    if cot:
-        mm_long = cot.get("m_money_positions_long_all", "н/д")
-        mm_short = cot.get("m_money_positions_short_all", "н/д")
-        cot_str = f"Long {mm_long} / Short {mm_short}"
-    else:
-        cot_str = "н/д"
 
-    message = (
-        f"🥇 <b>XAUUSD — сводка</b> ({now_str}, Ташкент)\n"
-        f"📌 Дашборд (подробности по каждой цифре): "
-        f"https://topshoh.github.io/xauusd-telegram-bot/dashboard.html\n\n"
-        f"💰 Цена: <b>{price_str}</b>\n"
-        f"📈 Доходность 10Y: <b>{nominal_str}</b> (номинал) / <b>{real_str}</b> (реальная, TIPS)\n"
-        f"🧾 CPI г/г: <b>{cpi_str}</b>\n"
-        f"👷 NFP (занятость): <b>{nfp_str}</b>\n"
-        f"🧾 PCE г/г: <b>{pce_str}</b>\n"
-        f"📊 COT (хедж-фонды): <b>{cot_str}</b>\n\n"
-        f"ℹ️ Сырые данные, без сигналов. Подробное объяснение каждой цифры "
-        f"(перевод, откуда, кто считает, как влияет) — в дашборде по ссылке "
-        f"выше, либо просто спросите в чате."
-    )
-    return [message]
+    mm_long = mm_short = None
+    if cot:
+        try:
+            mm_long = int(cot.get("m_money_positions_long_all", 0))
+            mm_short = int(cot.get("m_money_positions_short_all", 0))
+        except (ValueError, TypeError):
+            pass
+
+    # Классификация каждого фактора
+    factors = []  # список (ключ, вердикт, причина, строка_с_описанием)
+
+    yield_verdict = classify_yield(real_yield, real_prev)
+    if yield_verdict:
+        v, reason = yield_verdict
+        factors.append(("Доходность облигаций (с поправкой на инфляцию)",
+                         f"{real_yield:.2f}%", v, reason))
+
+    dxy_verdict = classify_dxy(dxy, dxy_prev)
+    if dxy_verdict:
+        v, reason = dxy_verdict
+        factors.append(("Индекс доллара (широкий, ФРС)", f"{dxy:.1f}", v, reason))
+
+    nfp_verdict = classify_nfp(nfp[0]) if nfp else None
+    if nfp_verdict:
+        v, reason = nfp_verdict
+        factors.append(("Рабочие места (NFP)", f"+{nfp[0]} тыс.", v, reason))
+
+    cot_verdict = classify_cot(mm_long, mm_short)
+    if cot_verdict:
+        v, reason = cot_verdict
+        factors.append(("Хедж-фонды (COT)", f"Long {mm_long:,} / Short {mm_short:,}", v, reason))
+
+    # CPI и PCE — намеренно всегда нейтральные: инфляция двулика для золота
+    # (давит на ставку, но золото же и защита от инфляции), не форсируем
+    # ложную однозначность
+    if cpi:
+        factors.append(("Инфляция CPI", f"{cpi[0]}%", "neutral",
+                         "двойной эффект — давит на ставку, но золото и защита от инфляции"))
+    if pce:
+        factors.append(("Инфляция PCE", f"{pce[0]}%", "neutral",
+                         "двойной эффект, как и CPI"))
+
+    bullish = [f for f in factors if f[2] == "bullish"]
+    bearish = [f for f in factors if f[2] == "bearish"]
+    neutral = [f for f in factors if f[2] == "neutral"]
+
+    if len(bullish) > len(bearish):
+        tilt_label, tilt_emoji = "БЫЧИЙ", "🟢"
+    elif len(bearish) > len(bullish):
+        tilt_label, tilt_emoji = "МЕДВЕЖИЙ", "🔴"
+    else:
+        tilt_label, tilt_emoji = "БАЛАНС", "🟡"
+    strength = "СЛАБО " if abs(len(bullish) - len(bearish)) <= 1 else ""
+
+    lines = [
+        f"🥇 <b>XAUUSD — сводка</b> ({now_str}, Ташкент)",
+        "",
+        f"{tilt_emoji} <b>УКЛОН СЕЙЧАС: {strength}{tilt_label} ({len(bullish)} против {len(bearish)})</b>",
+    ]
+
+    if bullish:
+        lines.append(f"\n🟢 <b>Бычьи ({len(bullish)}):</b>")
+        for name, val, _, reason in bullish:
+            lines.append(f"• {name}: {val} — {reason}")
+    if bearish:
+        lines.append(f"\n🔴 <b>Медвежьи ({len(bearish)}):</b>")
+        for name, val, _, reason in bearish:
+            lines.append(f"• {name}: {val} — {reason}")
+    if neutral:
+        lines.append(f"\n🟡 <b>Нейтральные ({len(neutral)}):</b>")
+        for name, val, _, reason in neutral:
+            lines.append(f"• {name}: {val} — {reason}")
+
+    lines.append(f"\n📌 Дашборд: https://topshoh.github.io/xauusd-telegram-bot/dashboard.html")
+    lines.append(f"💰 Цена: <b>{price_str}</b>")
+    lines.append("\nℹ️ Не финансовый совет. Подробнее — в дашборде или спросите здесь.")
+
+    return ["\n".join(lines)]
 
 
 
