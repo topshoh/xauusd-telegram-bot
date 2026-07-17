@@ -71,11 +71,12 @@ REMINDER_EVENTS = [
 ]
 
 
-def is_market_closed() -> bool:
-    """Рынок золота закрыт с субботы 02:00 до понедельника 03:00 по Ташкенту
-    (тот же паттерн, что и в старых ботах проекта — см. project_context.md)."""
-    now = datetime.now(TASHKENT_TZ)
-    wd, hr = now.weekday(), now.hour  # 0=Пн ... 5=Сб, 6=Вс
+def _is_market_closed_at(dt) -> bool:
+    """Чистая функция без побочных эффектов — принимает конкретный момент
+    времени, а не всегда 'сейчас'. Нужна, чтобы переиспользовать логику
+    выходных для расчёта 'первый открытый день месяца' (см.
+    build_token_hygiene_reminder), а не только для гейта в main()."""
+    wd, hr = dt.weekday(), dt.hour  # 0=Пн ... 5=Сб, 6=Вс
     if wd == 5 and hr >= 2:
         return True
     if wd == 6:
@@ -83,6 +84,13 @@ def is_market_closed() -> bool:
     if wd == 0 and hr < 3:
         return True
     return False
+
+
+def is_market_closed() -> bool:
+    """Рынок золота закрыт с субботы 02:00 до понедельника 03:00 по Ташкенту
+    (тот же паттерн, что и в старых ботах проекта — см. project_context.md)."""
+    now = datetime.now(TASHKENT_TZ)
+    return _is_market_closed_at(now)
 
 
 # ============================================================
@@ -329,9 +337,22 @@ def build_event_reminders():
 
 
 def build_token_hygiene_reminder():
-    """Раз в месяц (1 числа) — напоминание проверить GitHub-токен."""
-    today = datetime.now(TASHKENT_TZ).date()
-    if today.day == 1:
+    """Раз в месяц — напоминание проверить GitHub-токен.
+
+    ИСПРАВЛЕНО: раньше проверяло строго 'today.day == 1' — если 1-е число
+    попадало на закрытый рынком день (суббота/воскресенье), бот в этот
+    день вообще не запускал отправку (см. is_market_closed в main()), и
+    напоминание молча пропадало на весь месяц. Теперь ищем ПЕРВЫЙ
+    открытый день месяца (проверяем 1, 2, 3 числа по очереди) и шлём
+    именно в этот день — 1-го, 2-го или 3-го, смотря по обстоятельствам."""
+    now = datetime.now(TASHKENT_TZ)
+    first_open_day = None
+    for day_num in range(1, 4):  # у длинных выходных на стыке месяцев больше 2 дней подряд не бывает
+        candidate = now.replace(day=day_num, hour=12, minute=0, second=0, microsecond=0)
+        if not _is_market_closed_at(candidate):
+            first_open_day = day_num
+            break
+    if first_open_day is not None and now.day == first_open_day:
         return (
             f"🔐 <b>ЕЖЕМЕСЯЧНОЕ НАПОМИНАНИЕ: ПРОВЕРЬТЕ GITHUB-ТОКЕН</b>\n\n"
             f"Зайдите в Settings → Developer settings → Personal access tokens "
