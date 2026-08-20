@@ -228,18 +228,39 @@ def fetch_calendar_events() -> list[dict]:
 # можно не удалять вручную, но лучше чистить раз в несколько недель.
 KNOWN_EVENTS = [
     {
-        "id": "2026-06-30-pmi",
-        "name": "PMI производства США (июнь)",
-        "date_utc": datetime(2026, 6, 30, 14, 0, tzinfo=timezone.utc),
-        "forecast": "49.0",
-        "previous": "48.5",
+        "id": "2026-08-19-fomc-minutes",
+        "name": "Минутки FOMC (протокол заседания 28-29 июля)",
+        "date_utc": datetime(2026, 8, 19, 18, 0, tzinfo=timezone.utc),
+        "forecast": "—",
+        "previous": "—",
     },
     {
-        "id": "2026-07-03-nfp",
-        "name": "Non-Farm Payrolls (июнь)",
-        "date_utc": datetime(2026, 7, 3, 12, 30, tzinfo=timezone.utc),
-        "forecast": "180K",
-        "previous": "199K",
+        "id": "2026-08-28-jackson-hole",
+        "name": "Джексон-Хоул — выступление главы ФРС (Уорш)",
+        "date_utc": datetime(2026, 8, 28, 14, 0, tzinfo=timezone.utc),
+        "forecast": "—",
+        "previous": "—",
+    },
+    {
+        "id": "2026-09-04-nfp",
+        "name": "Non-Farm Payrolls (август)",
+        "date_utc": datetime(2026, 9, 4, 12, 30, tzinfo=timezone.utc),
+        "forecast": "уточнить ближе к дате",
+        "previous": "-23K (июль)",
+    },
+    {
+        "id": "2026-09-11-cpi",
+        "name": "CPI (август)",
+        "date_utc": datetime(2026, 9, 11, 12, 30, tzinfo=timezone.utc),
+        "forecast": "уточнить ближе к дате (nowcast Cleveland Fed: ~3.36% г/г)",
+        "previous": "3.4% (июль)",
+    },
+    {
+        "id": "2026-09-16-fomc",
+        "name": "FOMC — решение по ставке (15-16 сентября)",
+        "date_utc": datetime(2026, 9, 16, 18, 0, tzinfo=timezone.utc),
+        "forecast": "пауза, ~35% шанс повышения",
+        "previous": "3.50-3.75% (без изменений, раскол 9-3)",
     },
     # Добавляй новые события сюда же по тому же образцу.
 ]
