@@ -575,7 +575,7 @@ def main():
     if token_reminder:
         messages.append(token_reminder)
 
-    full_report_triggered = is_full_report_day() or len(event_reminders) > 0
+    full_report_triggered = is_full_report_day() or len(event_reminders) > 0 or force_test
     if full_report_triggered:
         messages.extend(build_messages())
     else:
