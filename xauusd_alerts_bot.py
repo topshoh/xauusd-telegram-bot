@@ -24,6 +24,8 @@ xauusd_alerts_bot.py
 import os
 import json
 import base64
+import html
+import xml.etree.ElementTree as ET
 import requests
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -62,7 +64,18 @@ HIGH_IMPACT_KEYWORDS = [
     "Unemployment Rate", "Interest Rate Decision", "GDP",
 ]
 
-PRICE_SPIKE_THRESHOLD_PERCENT = 0.4  # порог для алерта на резкое движение
+PRICE_SPIKE_THRESHOLD_PERCENT = 0.4  # (устарело, оставлено для совместимости)
+
+# Окна для поиска резких движений: (минут, порог в %, пауза между повторами в минутах, подпись)
+# Сравниваем текущую цену с ценой из истории внутри окна, а не только с прошлым запуском —
+# GitHub запускает бота неровно, и медленное падение на несколько % раньше проходило незамеченным.
+MOVE_WINDOWS = [
+    (30, 0.5, 60, "30 минут"),
+    (60, 0.9, 90, "час"),
+    (240, 1.6, 240, "4 часа"),
+    (1440, 2.5, 720, "сутки"),
+]
+HISTORY_KEEP_MINUTES = 1440 + 360
 
 
 # ============================================================
@@ -684,6 +697,51 @@ def build_spike_alert_message(old_price: float, new_price: float, minutes_elapse
     return message
 
 
+def fetch_gold_headlines(limit: int = 3) -> list[str]:
+    """Свежие заголовки про золото (Google News RSS, бесплатно, без ключа)."""
+    try:
+        r = requests.get(
+            "https://news.google.com/rss/search",
+            params={"q": "gold price when:1d", "hl": "en-US", "gl": "US", "ceid": "US:en"},
+            timeout=12, headers={"User-Agent": "Mozilla/5.0"},
+        )
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        out = []
+        for item in root.iter("item"):
+            title = (item.findtext("title") or "").strip()
+            if title:
+                out.append(html.escape(title))
+            if len(out) >= limit:
+                break
+        return out
+    except Exception as exc:
+        print(f"[WARN] Заголовки новостей не получены: {exc}")
+        return []
+
+
+def build_move_alert_message(old_price: float, new_price: float, label: str, headlines: list[str]) -> str:
+    change_pct = (new_price - old_price) / old_price * 100
+    direction = "ВЫРОСЛА 📈" if change_pct > 0 else "УПАЛА 📉"
+    message = (
+        f"⚡ <b>Резкое движение цены золота</b>\n\n"
+        f"Цена {direction} на {abs(change_pct):.2f}% за последние {label}\n\n"
+        f"Было: ${old_price:,.2f}\n"
+        f"Сейчас: ${new_price:,.2f}\n\n"
+    )
+    if headlines:
+        message += "<b>Что пишут сейчас (заголовки, не проверено мной):</b>\n"
+        message += "\n".join(f"• {h}" for h in headlines) + "\n\n"
+    message += (
+        "<b>Простыми словами:</b> такое движение для золота нетипично. Чаще всего за ним стоят "
+        "неожиданные новости, распродажа всего рынка (когда продают и золото, чтобы закрыть "
+        "убытки в других активах) или смена ожиданий по ставке ФРС. "
+        "Напишите мне в чат «почему упало золото» — разберу причину по свежим данным.\n\n"
+        "<i>Это не торговый сигнал — просто уведомление о нетипичной активности.</i>"
+    )
+    return message
+
+
 def send_telegram_message(text: str) -> None:
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -737,25 +795,55 @@ def main() -> None:
     # очищаем старые записи (события больше суток назад) чтобы файл не рос бесконечно
     state["sent_warnings"] = list(sent_warnings)[-200:]
 
-    # --- 2. Проверка резкого движения цены ---
+    # --- 2. Проверка резкого движения цены (несколько окон по истории цен) ---
     current_price = fetch_gold_price()
     print(f"[ЛОГ] Текущая цена золота: {current_price}")
     if current_price is not None:
-        last_price = state.get("last_price")
-        last_price_time_str = state.get("last_price_time")
+        history = state.get("price_history") or []
+        if not history and state.get("last_price") and state.get("last_price_time"):
+            history = [[state["last_price_time"], state["last_price"]]]
+        parsed = []
+        for t, pr in history:
+            try:
+                parsed.append((datetime.fromisoformat(t), float(pr)))
+            except Exception:
+                continue
+        parsed = [(t, pr) for t, pr in parsed if (now_utc - t).total_seconds() / 60 <= HISTORY_KEEP_MINUTES]
 
-        if last_price is not None and last_price_time_str:
-            last_price_time = datetime.fromisoformat(last_price_time_str)
-            minutes_elapsed = (now_utc - last_price_time).total_seconds() / 60
-            change_pct = abs((current_price - last_price) / last_price * 100)
-            print(f"[ЛОГ] Предыдущая цена: {last_price} ({minutes_elapsed:.1f} мин назад), изменение: {change_pct:.3f}% (порог: {PRICE_SPIKE_THRESHOLD_PERCENT}%)")
+        sent_moves = state.get("sent_moves") or {}
+        for minutes, threshold, cooldown, label in MOVE_WINDOWS:
+            # опорная цена: самая старая точка, которая не старше окна (+25% запаса) и не моложе половины окна
+            candidates = [(t, pr) for t, pr in parsed
+                          if minutes * 0.5 <= (now_utc - t).total_seconds() / 60 <= minutes * 1.25]
+            if not candidates:
+                continue
+            ref_t, ref_price = min(candidates, key=lambda x: x[0])
+            change_pct = (current_price - ref_price) / ref_price * 100
+            print(f"[ЛОГ] Окно {label}: было {ref_price} → {current_price}, {change_pct:+.2f}% (порог {threshold}%)")
+            if abs(change_pct) >= threshold:
+                dir_key = "up" if change_pct > 0 else "down"
+                # не засыпаем сообщениями: одно движение — один алерт (общая пауза 2 часа
+                # на направление + своя пауза у каждого окна)
+                skip = False
+                for key, pause in ((f"{label}_{dir_key}", cooldown), (f"any_{dir_key}", 120)):
+                    last_sent = sent_moves.get(key)
+                    if last_sent:
+                        try:
+                            if (now_utc - datetime.fromisoformat(last_sent)).total_seconds() / 60 < pause:
+                                skip = True
+                        except Exception:
+                            pass
+                if skip:
+                    continue
+                headlines = fetch_gold_headlines()
+                send_telegram_message(build_move_alert_message(ref_price, current_price, label, headlines))
+                sent_moves[f"{label}_{dir_key}"] = now_utc.isoformat()
+                sent_moves[f"any_{dir_key}"] = now_utc.isoformat()
+                break  # одного сообщения за запуск достаточно
 
-            if change_pct >= PRICE_SPIKE_THRESHOLD_PERCENT and minutes_elapsed <= 35:
-                message = build_spike_alert_message(last_price, current_price, minutes_elapsed)
-                send_telegram_message(message)
-        else:
-            print("[ЛОГ] Нет предыдущей цены для сравнения (первый запуск).")
-
+        parsed.append((now_utc, current_price))
+        state["price_history"] = [[t.isoformat(), pr] for t, pr in parsed][-200:]
+        state["sent_moves"] = sent_moves
         state["last_price"] = current_price
         state["last_price_time"] = now_utc.isoformat()
 

@@ -592,6 +592,113 @@ def build_messages():
 
 
 # ============================================================
+# ОТДЕЛЬНОЕ СООБЩЕНИЕ: еженедельный отчёт COT (как блок в дашборде)
+# ============================================================
+COT_GROUPS = [
+    ("Managed Money (хедж-фонды, «умные деньги»)",
+     ("m_money_positions_long_all",), ("m_money_positions_short_all",)),
+    ("Swap Dealers (банки)",
+     ("swap_positions_long_all", "swap__positions_long_all"),
+     ("swap__positions_short_all", "swap_positions_short_all")),
+    ("Producer/Merchant (производители золота)",
+     ("prod_merc_positions_long", "prod_merc_positions_long_all"),
+     ("prod_merc_positions_short", "prod_merc_positions_short_all")),
+]
+
+
+def _fmt(n, signed=False):
+    """Число с пробелами между тысячами (148 634), при signed — со знаком."""
+    return (f"{n:+,}" if signed else f"{n:,}").replace(",", " ")
+
+
+def _cot_val(row, keys):
+    for k in keys:
+        if row is not None and k in row and row[k] not in (None, ""):
+            try:
+                return int(float(row[k]))
+            except ValueError:
+                pass
+    return None
+
+
+def fetch_cot_two_reports():
+    """Два последних отчёта COT, чтобы посчитать изменение за неделю."""
+    url = "https://publicreporting.cftc.gov/resource/72hh-3qpy.json"
+    params = {
+        "$where": "market_and_exchange_names like 'GOLD%COMMODITY EXCHANGE%'",
+        "$order": "report_date_as_yyyy_mm_dd DESC",
+        "$limit": 2,
+    }
+    try:
+        r = requests.get(url, params=params, timeout=20)
+        r.raise_for_status()
+        rows = r.json()
+        return rows if rows else []
+    except Exception as e:
+        print(f"[WARN] COT-отчёт: не удалось получить данные CFTC: {e}")
+        return []
+
+
+def build_cot_report():
+    """Возвращает текст сообщения с COT или None, если данные не получены."""
+    rows = fetch_cot_two_reports()
+    if not rows:
+        return None
+    cur = rows[0]
+    prev = rows[1] if len(rows) > 1 else None
+    try:
+        report_date = datetime.strptime(cur["report_date_as_yyyy_mm_dd"][:10], "%Y-%m-%d").strftime("%d.%m.%Y")
+    except Exception:
+        report_date = "дата неизвестна"
+
+    lines = [
+        "📊 <b>COT — позиции крупных игроков по золоту</b>",
+        f"Данные CFTC на {report_date} (отчёт выходит по пятницам, данные — на предыдущий вторник)",
+        "",
+    ]
+    nets = {}
+    found = 0
+    for title, long_keys, short_keys in COT_GROUPS:
+        lg, sh = _cot_val(cur, long_keys), _cot_val(cur, short_keys)
+        if lg is None or sh is None:
+            lines.append(f"<b>{title}</b>\n  нет данных в отчёте")
+            continue
+        found += 1
+        net = lg - sh
+        nets[title] = (lg, sh, net)
+        plg, psh = _cot_val(prev, long_keys), _cot_val(prev, short_keys)
+        if plg is not None and psh is not None:
+            d = net - (plg - psh)
+            delta = f" (за неделю {_fmt(d, True)})"
+        else:
+            delta = ""
+        lines.append(
+            f"<b>{title}</b>\n  Long {_fmt(lg)} · Short {_fmt(sh)} · Net {_fmt(net, True)}{delta}"
+        )
+    if found == 0:
+        print("[WARN] COT-отчёт: ни одна группа не распознана, поля:", list(cur.keys())[:40])
+        return None
+
+    lines.append("")
+    mm = nets.get(COT_GROUPS[0][0])
+    sw = nets.get(COT_GROUPS[1][0])
+    if mm and (mm[0] + mm[1]) > 0:
+        pct = mm[0] / (mm[0] + mm[1]) * 100
+        lines.append(f"• Хедж-фонды: {pct:.0f}% позиций — в лонге. Чем ближе к 100%, тем больше "
+                     f"риск, что покупать уже некому, а при падении начнётся массовая фиксация.")
+    if sw:
+        lines.append("• Банки (Swap Dealers) почти всегда в шорте — это в основном хеджирование "
+                     "клиентов. Резкий рост этого шорта называют топливом для short squeeze, "
+                     "если цена пойдёт вверх.")
+    lines.append("")
+    lines.append("ℹ️ Это отчёт Futures Only (CFTC Socrata). В дашборде может быть Futures+Options — "
+                 "цифры немного отличаются.")
+    lines.append("📌 Дашборд: https://topshoh.github.io/xauusd-telegram-bot/dashboard.html")
+    return "\n".join(lines)
+
+
+
+# ============================================================
 # ОТПРАВКА В TELEGRAM
 # ============================================================
 def send_telegram_message(text: str):
@@ -634,6 +741,9 @@ def main():
     full_report_triggered = is_full_report_day() or len(event_reminders) > 0 or force_test
     if full_report_triggered:
         messages.extend(build_messages())
+        cot_msg = build_cot_report()
+        if cot_msg:
+            messages.append(cot_msg)
     else:
         print("Не понедельник и нет напоминаний рядом — сегодня бот молчит (это ожидаемо, не баг).")
 
