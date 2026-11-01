@@ -378,20 +378,38 @@ def _fred_last_two(series_id: str):
         return None
 
 
+def _vix_zone(v: float) -> str:
+    if v < 15: return "🟢 спокойно"
+    if v < 20: return "🟢 норма"
+    if v < 25: return "🟡 тревожно"
+    if v < 30: return "🟠 высокий страх"
+    if v < 40: return "🔴 паника"
+    return "🔴 экстремальная паника"
+
+
+def _sp_zone(pct: float) -> str:
+    if pct > -0.5: return "🟢 обычные колебания"
+    if pct > -1.2: return "🟡 небольшое снижение"
+    if pct > -2.0: return "🟠 заметное падение"
+    if pct > -3.0: return "🔴 сильное падение"
+    return "🔴 обвал"
+
+
 def build_market_stress_line() -> str:
     """Строка про S&P 500 и VIX для сводки (закрытие предыдущего дня, FRED)."""
     sp = _fred_last_two("SP500")
     vx = _fred_last_two("VIXCLS")
     parts = []
     if sp:
-        parts.append(f"S&P 500 {sp[0]:,.0f} ({(sp[0]-sp[1])/sp[1]*100:+.2f}% за день)".replace(",", " "))
+        chg = (sp[0] - sp[1]) / sp[1] * 100
+        parts.append(f"S&P 500 {sp[0]:,.0f} ({chg:+.2f}% за день — {_sp_zone(chg)})".replace(",", " "))
     if vx:
-        flag = " ⚠️ повышенный страх" if vx[0] >= 25 else ""
-        parts.append(f"VIX {vx[0]:.1f} (было {vx[1]:.1f}){flag}")
+        parts.append(f"VIX {vx[0]:.1f} (было {vx[1]:.1f}) — {_vix_zone(vx[0])}")
     if not parts:
         return ""
-    return "\n📈 Рынок акций (закрытие): " + " · ".join(parts)
-
+    return ("\n📈 <b>Рынок акций (закрытие):</b>\n• " + "\n• ".join(parts) +
+            "\n(VIX: до 20 — норма, 20–25 — тревожно, 25–30 — высокий страх, выше 30 — паника. "
+            "S&P 500: падение от −1.2% за день — повод быть бдительным.)")
 
 
 # ============================================================
