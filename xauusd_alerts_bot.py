@@ -697,6 +697,85 @@ def build_spike_alert_message(old_price: float, new_price: float, minutes_elapse
     return message
 
 
+# ============================================================
+# Состояние рынка: S&P 500 и VIX (Yahoo Finance, бесплатно, без ключа)
+# ============================================================
+STRESS_SP500_DROP = -1.5    # падение S&P 500 за день, %
+STRESS_VIX_JUMP = 15.0      # рост VIX за день, %
+STRESS_VIX_LEVEL = 30.0     # или уровень VIX выше этого
+
+
+def _yahoo_quote(symbol: str):
+    """(текущая цена, закрытие предыдущей сессии) или (None, None)."""
+    try:
+        r = requests.get(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+            params={"range": "1d", "interval": "1d"},
+            timeout=15, headers={"User-Agent": "Mozilla/5.0"},
+        )
+        r.raise_for_status()
+        meta = r.json()["chart"]["result"][0]["meta"]
+        price = meta.get("regularMarketPrice")
+        prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+        if price is None or not prev:
+            return None, None
+        return float(price), float(prev)
+    except Exception as exc:
+        print(f"[WARN] Yahoo {symbol}: {exc}")
+        return None, None
+
+
+def fetch_market_context():
+    """{'sp': (цена, изм%), 'vix': (уровень, изм%)} или None, если данных нет."""
+    sp, sp_prev = _yahoo_quote("%5EGSPC")
+    vx, vx_prev = _yahoo_quote("%5EVIX")
+    ctx = {}
+    if sp is not None:
+        ctx["sp"] = (sp, (sp - sp_prev) / sp_prev * 100)
+    if vx is not None:
+        ctx["vix"] = (vx, (vx - vx_prev) / vx_prev * 100)
+    return ctx or None
+
+
+def context_line(ctx) -> str:
+    if not ctx:
+        return ""
+    parts = []
+    if "sp" in ctx:
+        parts.append(f"S&P 500 {ctx['sp'][1]:+.2f}% за день")
+    if "vix" in ctx:
+        parts.append(f"VIX {ctx['vix'][0]:.1f} ({ctx['vix'][1]:+.1f}%)")
+    return "📊 Рынок сейчас: " + " · ".join(parts) + "\n\n"
+
+
+def stress_triggered(ctx) -> bool:
+    if not ctx:
+        return False
+    if "sp" in ctx and ctx["sp"][1] <= STRESS_SP500_DROP:
+        return True
+    if "vix" in ctx and (ctx["vix"][1] >= STRESS_VIX_JUMP or ctx["vix"][0] >= STRESS_VIX_LEVEL):
+        return True
+    return False
+
+
+def build_stress_message(ctx, gold_change_pct) -> str:
+    msg = "🌩 <b>Рынок под давлением</b>\n\n" + context_line(ctx)
+    if gold_change_pct is not None:
+        msg += f"🥇 Золото за сутки: {gold_change_pct:+.2f}%\n\n"
+    if gold_change_pct is not None and gold_change_pct <= -1.0:
+        msg += ("<b>Золото падает вместе с акциями.</b> Обычно они движутся по-разному. Когда падает "
+                "всё сразу, это часто значит, что крупные игроки вынуждены продавать то, что "
+                "продаётся легко (в том числе золото), чтобы закрыть убытки в других активах. "
+                "Такая фаза обычно короткая, но по ней нельзя предсказать дно.\n\n")
+    else:
+        msg += ("<b>Простыми словами:</b> акции падают или растёт «индекс страха» VIX. Золото пока "
+                "держится, но в такие дни его тоже могут продавать, чтобы покрыть убытки в других "
+                "активах. Следите за ценой золота.\n\n")
+    msg += "<i>Это не торговый сигнал — просто уведомление о состоянии рынка.</i>"
+    return msg
+
+
+
 def fetch_gold_headlines(limit: int = 3) -> list[str]:
     """Свежие заголовки про золото (Google News RSS, бесплатно, без ключа)."""
     try:
@@ -720,7 +799,7 @@ def fetch_gold_headlines(limit: int = 3) -> list[str]:
         return []
 
 
-def build_move_alert_message(old_price: float, new_price: float, label: str, headlines: list[str]) -> str:
+def build_move_alert_message(old_price: float, new_price: float, label: str, headlines: list[str], ctx=None) -> str:
     change_pct = (new_price - old_price) / old_price * 100
     direction = "ВЫРОСЛА 📈" if change_pct > 0 else "УПАЛА 📉"
     message = (
@@ -728,6 +807,7 @@ def build_move_alert_message(old_price: float, new_price: float, label: str, hea
         f"Цена {direction} на {abs(change_pct):.2f}% за последние {label}\n\n"
         f"Было: ${old_price:,.2f}\n"
         f"Сейчас: ${new_price:,.2f}\n\n"
+        + context_line(ctx)
     )
     if headlines:
         message += "<b>Что пишут сейчас (заголовки, не проверено мной):</b>\n"
@@ -797,6 +877,7 @@ def main() -> None:
 
     # --- 2. Проверка резкого движения цены (несколько окон по истории цен) ---
     current_price = fetch_gold_price()
+    parsed = []
     print(f"[ЛОГ] Текущая цена золота: {current_price}")
     if current_price is not None:
         history = state.get("price_history") or []
@@ -836,7 +917,7 @@ def main() -> None:
                 if skip:
                     continue
                 headlines = fetch_gold_headlines()
-                send_telegram_message(build_move_alert_message(ref_price, current_price, label, headlines))
+                send_telegram_message(build_move_alert_message(ref_price, current_price, label, headlines, fetch_market_context()))
                 sent_moves[f"{label}_{dir_key}"] = now_utc.isoformat()
                 sent_moves[f"any_{dir_key}"] = now_utc.isoformat()
                 break  # одного сообщения за запуск достаточно
@@ -846,6 +927,25 @@ def main() -> None:
         state["sent_moves"] = sent_moves
         state["last_price"] = current_price
         state["last_price_time"] = now_utc.isoformat()
+
+    # --- 3. Рынок под давлением (S&P 500 / VIX), не чаще раза в сутки ---
+    stress_key = f"stress_{now_utc.strftime('%Y-%m-%d')}"
+    sent_moves = state.get("sent_moves") or {}
+    if stress_key not in sent_moves:
+        ctx = fetch_market_context()
+        if stress_triggered(ctx):
+            gold_change = None
+            if current_price is not None:
+                for t, pr in sorted(parsed):
+                    age = (now_utc - t).total_seconds() / 60
+                    if 600 <= age <= 1800:
+                        gold_change = (current_price - pr) / pr * 100
+                        break
+            send_telegram_message(build_stress_message(ctx, gold_change))
+            sent_moves[stress_key] = now_utc.isoformat()
+    # чистим старые ключи, чтобы файл не рос
+    state["sent_moves"] = {k: v for k, v in sent_moves.items()
+                           if not k.startswith("stress_") or k == stress_key or k >= f"stress_{(now_utc - timedelta(days=3)).strftime('%Y-%m-%d')}"}
 
     save_state(state)
 

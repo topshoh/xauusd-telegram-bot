@@ -360,6 +360,40 @@ def fetch_cot_gold():
         return None
 
 
+def _fred_last_two(series_id: str):
+    """Два последних значения ряда FRED: (последнее, предыдущее, дата) или None."""
+    if not FRED_API_KEY:
+        return None
+    try:
+        r = requests.get("https://api.stlouisfed.org/fred/series/observations", params={
+            "series_id": series_id, "api_key": FRED_API_KEY, "file_type": "json",
+            "sort_order": "desc", "limit": 10}, timeout=15)
+        r.raise_for_status()
+        obs = [o for o in r.json().get("observations", []) if o.get("value") not in (".", None)]
+        if len(obs) < 2:
+            return None
+        return float(obs[0]["value"]), float(obs[1]["value"]), obs[0]["date"]
+    except Exception as e:
+        print(f"[WARN] FRED {series_id}: {e}")
+        return None
+
+
+def build_market_stress_line() -> str:
+    """Строка про S&P 500 и VIX для сводки (закрытие предыдущего дня, FRED)."""
+    sp = _fred_last_two("SP500")
+    vx = _fred_last_two("VIXCLS")
+    parts = []
+    if sp:
+        parts.append(f"S&P 500 {sp[0]:,.0f} ({(sp[0]-sp[1])/sp[1]*100:+.2f}% за день)".replace(",", " "))
+    if vx:
+        flag = " ⚠️ повышенный страх" if vx[0] >= 25 else ""
+        parts.append(f"VIX {vx[0]:.1f} (было {vx[1]:.1f}){flag}")
+    if not parts:
+        return ""
+    return "\n📈 Рынок акций (закрытие): " + " · ".join(parts)
+
+
+
 # ============================================================
 # СБОРКА СООБЩЕНИЯ
 # ============================================================
@@ -583,6 +617,9 @@ def build_messages():
         for name, v, reason in neutral:
             lines.append(f"• {name} {reason} → {REACTION_TAG[v]}")
 
+    stress_line = build_market_stress_line()
+    if stress_line:
+        lines.append(stress_line)
     lines.append(f"\n📌 Дашборд: https://topshoh.github.io/xauusd-telegram-bot/dashboard.html")
     lines.append(f"💰 Цена: <b>{price_str}</b>")
     lines.append("\nℹ️ Не финансовый совет. Подробнее — в дашборде или спросите здесь.")
