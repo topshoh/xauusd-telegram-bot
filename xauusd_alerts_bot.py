@@ -22,6 +22,7 @@ xauusd_alerts_bot.py
 """
 
 import os
+import time
 import json
 import base64
 import html
@@ -893,7 +894,33 @@ def send_telegram_message(text: str) -> None:
 # Основная логика
 # ============================================================
 
+def send_demo_messages() -> None:
+    """Тестовый режим: при ручном запуске (Run workflow) шлёт примеры сообщений с пометкой ТЕСТ.
+    Состояние бота не меняется, реальных алертов не создаётся."""
+    tag = "🧪 <b>ТЕСТ — так будет выглядеть сообщение (цифры примерные)</b>\n\n"
+    demo_ctx = {"sp": (7580.07, -1.82), "vix": (24.6, 12.9)}
+    demo_event = {
+        "id": "demo", "name": "Non-Farm Payrolls (октябрь)",
+        "date_utc": datetime.now(timezone.utc) + timedelta(minutes=30),
+        "forecast": "уточнить ближе к дате", "previous": "+29K (сентябрь), безработица 4.2%",
+    }
+    messages = [
+        tag + "<b>1/3. Предупреждение о событии (за 30 минут):</b>\n\n" + build_warning_message(demo_event, 30),
+        tag + "<b>2/3. Резкое движение цены золота:</b>\n\n" + build_move_alert_message(
+            3992.0, 3899.0, "4 часа",
+            ["Gold falls to one-year low as Fed hike bets build (пример заголовка)"], demo_ctx),
+        tag + "<b>3/3. Рынок под давлением:</b>\n\n" + build_stress_message(demo_ctx, -2.3),
+    ]
+    for m in messages:
+        send_telegram_message(m)
+        time.sleep(1.5)
+
+
 def main() -> None:
+    if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+        print("Ручной запуск (Run workflow) — отправляю тестовые сообщения.")
+        send_demo_messages()
+        return
     now_tashkent = datetime.now(TASHKENT_TZ)
 
     if is_market_closed(now_tashkent):
