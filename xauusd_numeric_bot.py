@@ -825,6 +825,118 @@ def build_cot_report():
 
 
 # ============================================================
+# СНИМОК ДАННЫХ И ОТЧЁТ «ЧТО ИЗМЕНИЛОСЬ ПОСЛЕ ВЫХОДА ДАННЫХ»
+# (используется алерт-ботом: снимок до выхода NFP/CPI/PCE и после)
+# ============================================================
+def compute_snapshot():
+    """Компактный JSON-совместимый снимок: цена, вердикты факторов, ключевые числа."""
+    price = fetch_gold_price()
+    real_yield, _, real_prev = fetch_fred_series("DFII10")
+    dxy, _, dxy_prev = fetch_dxy_proxy()
+    cpi = fetch_cpi_yoy()
+    nfp = fetch_nfp_change()
+    pce = fetch_pce_yoy()
+    cot = fetch_cot_gold()
+    mm_long = mm_short = None
+    if cot:
+        try:
+            mm_long = int(cot.get("m_money_positions_long_all", 0))
+            mm_short = int(cot.get("m_money_positions_short_all", 0))
+        except (ValueError, TypeError):
+            pass
+
+    factors = {}
+    for name, res in (("Доходность облигаций", classify_yield(real_yield, real_prev)),
+                      ("Доллар", classify_dxy(dxy, dxy_prev)),
+                      ("Рабочие места", classify_nfp(nfp[0]) if nfp else None),
+                      ("Хедж-фонды", classify_cot(mm_long, mm_short))):
+        if res:
+            factors[name] = {"verdict": res[0], "text": res[1]}
+    if cpi:
+        factors["CPI"] = {"verdict": "neutral", "text": f"{cpi[0]}% (было {cpi[2]}%)"}
+    if pce:
+        factors["PCE"] = {"verdict": "neutral", "text": f"{pce[0]}%"}
+
+    bull = sum(1 for f in factors.values() if f["verdict"] == "bullish")
+    bear = sum(1 for f in factors.values() if f["verdict"] == "bearish")
+    return {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "price": price,
+        "bullish": bull, "bearish": bear,
+        "factors": factors,
+        "raw": {
+            "nfp": [nfp[0], nfp[1]] if nfp else None,
+            "cpi": [cpi[0], cpi[1], cpi[2]] if cpi else None,
+            "pce": pce[0] if pce else None,
+            "real_yield": real_yield, "dxy": dxy,
+        },
+    }
+
+
+def _tilt_text(bull, bear):
+    if bull > bear:
+        return f"🟢 бычий ({bull} против {bear})"
+    if bear > bull:
+        return f"🔴 медвежий ({bull} против {bear})"
+    return f"🟡 баланс ({bull} против {bear})"
+
+
+def release_detected(kind, before, after):
+    """Появились ли в источниках новые данные по событию (kind: nfp / cpi / pce)."""
+    b, a = (before or {}).get("raw", {}), (after or {}).get("raw", {})
+    if kind == "nfp":
+        return bool(a.get("nfp")) and a.get("nfp") != b.get("nfp")
+    if kind == "cpi":
+        return bool(a.get("cpi")) and a.get("cpi") != b.get("cpi")
+    if kind == "pce":
+        return a.get("pce") is not None and a.get("pce") != b.get("pce")
+    return True
+
+
+def build_change_report(event_name, before, after):
+    """Сообщение «После выхода <событие> изменилось: …». before может быть None."""
+    lines = [f"🔄 <b>После выхода {html_escape(event_name)} изменилось:</b>", ""]
+    if not before:
+        lines.append("(Снимок «до выхода» не успел сохраниться — показываю текущие данные.)")
+        lines.append(f"Уклон сейчас: {_tilt_text(after['bullish'], after['bearish'])}")
+        for name, f in after["factors"].items():
+            lines.append(f"• {name}: {f['text']} — {VERDICT_EMOJI[f['verdict']]} {VERDICT_LABEL[f['verdict']].lower()}")
+    else:
+        bt, at = _tilt_text(before["bullish"], before["bearish"]), _tilt_text(after["bullish"], after["bearish"])
+        if (before["bullish"], before["bearish"]) != (after["bullish"], after["bearish"]):
+            lines.append(f"<b>Общий уклон:</b> {bt} → {at}")
+        else:
+            lines.append(f"<b>Общий уклон не изменился:</b> {at}")
+        lines.append("")
+        changed = 0
+        for name, f in after["factors"].items():
+            old = before["factors"].get(name)
+            if old is None:
+                lines.append(f"• <b>{name}:</b> новый показатель — {f['text']} ({VERDICT_EMOJI[f['verdict']]} {VERDICT_LABEL[f['verdict']].lower()})")
+                changed += 1
+            elif old["text"] != f["text"] or old["verdict"] != f["verdict"]:
+                lines.append(
+                    f"• <b>{name}:</b> было {old['text']} ({VERDICT_EMOJI[old['verdict']]} {VERDICT_LABEL[old['verdict']].lower()})\n"
+                    f"   стало <b>{f['text']}</b> ({VERDICT_EMOJI[f['verdict']]} {VERDICT_LABEL[f['verdict']].lower()})")
+                changed += 1
+        if changed == 0:
+            lines.append("Показатели из сводки остались прежними.")
+    if before and before.get("price") and after.get("price"):
+        pct = (after["price"] - before["price"]) / before["price"] * 100
+        lines.append(f"\n💰 <b>Цена золота:</b> ${before['price']:,.2f} → ${after['price']:,.2f} ({pct:+.2f}%)")
+    elif after.get("price"):
+        lines.append(f"\n💰 <b>Цена золота:</b> ${after['price']:,.2f}")
+    lines.append("\n📌 Дашборд: https://topshoh.github.io/xauusd-telegram-bot/dashboard.html")
+    lines.append("ℹ️ Не финансовый совет. Чтобы обновить дашборд, напишите мне «обнови дашборд».")
+    return "\n".join(lines)
+
+
+def html_escape(t):
+    return str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+
+# ============================================================
 # ОТПРАВКА В TELEGRAM
 # ============================================================
 def send_telegram_message(text: str):

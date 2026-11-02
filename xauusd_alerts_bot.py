@@ -894,6 +894,91 @@ def send_telegram_message(text: str) -> None:
 # Основная логика
 # ============================================================
 
+# ============================================================
+# «ЧТО ИЗМЕНИЛОСЬ ПОСЛЕ ВЫХОДА ДАННЫХ» (NFP / CPI / PCE)
+# ============================================================
+POST_EVENT_KINDS = {"nfp": "nfp", "cpi": "cpi", "pce": "pce"}
+PRE_SNAPSHOT_WINDOW_MIN = 120      # снимок «до» делаем за 2 часа до выхода
+POST_FIRST_CHECK_MIN = 45          # первая проверка через 45 минут после выхода
+POST_GIVE_UP_HOURS = 48            # после 48 часов перестаём ждать данные в источниках
+
+
+def _event_kind(event):
+    eid = event.get("id", "")
+    for suffix, kind in POST_EVENT_KINDS.items():
+        if eid.endswith("-" + suffix):
+            return kind
+    return None
+
+
+def handle_post_release(state: dict, now_utc: datetime) -> None:
+    """Снимок до выхода → отчёт об изменениях после выхода. Любая ошибка не ломает остальные алерты."""
+    try:
+        import xauusd_numeric_bot as nb
+    except Exception as exc:
+        print(f"[WARN] Отчёт после выхода данных недоступен (импорт): {exc}")
+        return
+    snaps = state.setdefault("snapshots", {})
+    done = state.setdefault("post_done", {})
+    tries = state.setdefault("post_tries", {})
+
+    for event in KNOWN_EVENTS:
+        kind = _event_kind(event)
+        if not kind:
+            continue
+        eid, when = event["id"], event["date_utc"]
+        minutes_to = (when - now_utc).total_seconds() / 60
+
+        # 1) снимок ДО выхода
+        if 0 < minutes_to <= PRE_SNAPSHOT_WINDOW_MIN and eid not in snaps:
+            try:
+                snaps[eid] = nb.compute_snapshot()
+                print(f"[ЛОГ] Сохранён снимок «до» для {eid}")
+            except Exception as exc:
+                print(f"[WARN] Снимок «до» для {eid} не получен: {exc}")
+            continue
+
+        # 2) отчёт ПОСЛЕ выхода
+        minutes_after = -minutes_to
+        if minutes_after < POST_FIRST_CHECK_MIN or eid in done:
+            continue
+        if minutes_after > POST_GIVE_UP_HOURS * 60:
+            if eid not in done:
+                done[eid] = "gave_up"
+                send_telegram_message(
+                    f"ℹ️ После выхода «{event['name']}» новые данные в бесплатных источниках так и не "
+                    f"появились за {POST_GIVE_UP_HOURS} часов. Проверьте вручную или напишите мне «обнови дашборд».")
+            continue
+        last_try = tries.get(eid)
+        gap = 20 if minutes_after <= 360 else 120   # первые 6 часов — каждые 20 мин, потом реже
+        if last_try:
+            try:
+                if (now_utc - datetime.fromisoformat(last_try)).total_seconds() / 60 < gap:
+                    continue
+            except Exception:
+                pass
+        tries[eid] = now_utc.isoformat()
+        try:
+            after = nb.compute_snapshot()
+        except Exception as exc:
+            print(f"[WARN] Снимок «после» для {eid} не получен: {exc}")
+            continue
+        before = snaps.get(eid)
+        if before is not None and not nb.release_detected(kind, before, after):
+            print(f"[ЛОГ] {eid}: новых данных в источниках пока нет, повторю позже.")
+            continue
+        send_telegram_message(nb.build_change_report(event["name"], before, after))
+        done[eid] = now_utc.isoformat()
+
+    # чистим старое, чтобы файл состояния не рос
+    cutoff = now_utc - timedelta(days=10)
+    for d in (snaps, done, tries):
+        for k in list(d.keys()):
+            ev = next((e for e in KNOWN_EVENTS if e["id"] == k), None)
+            if ev and ev["date_utc"] < cutoff:
+                d.pop(k, None)
+
+
 def send_demo_messages() -> None:
     """Тестовый режим: при ручном запуске (Run workflow) шлёт примеры сообщений с пометкой ТЕСТ.
     Состояние бота не меняется, реальных алертов не создаётся."""
@@ -905,12 +990,24 @@ def send_demo_messages() -> None:
         "forecast": "уточнить ближе к дате", "previous": "+29K (сентябрь), безработица 4.2%",
     }
     messages = [
-        tag + "<b>1/3. Предупреждение о событии (за 30 минут):</b>\n\n" + build_warning_message(demo_event, 30),
-        tag + "<b>2/3. Резкое движение цены золота:</b>\n\n" + build_move_alert_message(
+        tag + "<b>1/4. Предупреждение о событии (за 30 минут):</b>\n\n" + build_warning_message(demo_event, 30),
+        tag + "<b>2/4. Резкое движение цены золота:</b>\n\n" + build_move_alert_message(
             3992.0, 3899.0, "4 часа",
             ["Gold falls to one-year low as Fed hike bets build (пример заголовка)"], demo_ctx),
-        tag + "<b>3/3. Рынок под давлением:</b>\n\n" + build_stress_message(demo_ctx, -2.3),
+        tag + "<b>3/4. Рынок под давлением:</b>\n\n" + build_stress_message(demo_ctx, -2.3),
     ]
+    try:
+        import xauusd_numeric_bot as nb
+        bf = {"price": 3990.0, "bullish": 3, "bearish": 1, "raw": {},
+              "factors": {"Рабочие места": {"verdict": "neutral", "text": "+29К, мало — слабая экономика"},
+                          "Доллар": {"verdict": "neutral", "text": "почти без изменений (121.4)"}}}
+        af = {"price": 3935.0, "bullish": 3, "bearish": 2, "raw": {},
+              "factors": {"Рабочие места": {"verdict": "bearish", "text": "+185К, много — сильная экономика, ФРС жёстче"},
+                          "Доллар": {"verdict": "bearish", "text": "вырос на 0.4% (121.9)"}}}
+        messages.append(tag + "<b>4/4. Что изменилось после выхода данных (пример):</b>\n\n"
+                        + nb.build_change_report("Non-Farm Payrolls (октябрь)", bf, af))
+    except Exception as exc:
+        print(f"[WARN] Демо отчёта после выхода не собрано: {exc}")
     for m in messages:
         send_telegram_message(m)
         time.sleep(1.5)
@@ -955,6 +1052,9 @@ def main() -> None:
 
     # очищаем старые записи (события больше суток назад) чтобы файл не рос бесконечно
     state["sent_warnings"] = list(sent_warnings)[-200:]
+
+    # --- 1б. Отчёт «что изменилось после выхода данных» ---
+    handle_post_release(state, now_utc)
 
     # --- 2. Проверка резкого движения цены (несколько окон по истории цен) ---
     current_price = fetch_gold_price()
