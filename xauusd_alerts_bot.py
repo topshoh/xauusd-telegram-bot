@@ -973,6 +973,7 @@ def handle_post_release(state: dict, now_utc: datetime) -> None:
             continue
         send_telegram_message(nb.build_change_report(event["name"], before, after))
         done[eid] = now_utc.isoformat()
+        state["digest_base"] = after   # не дублируем то же изменение в еженедельном отчёте
 
     # чистим старое, чтобы файл состояния не рос
     cutoff = now_utc - timedelta(days=10)
@@ -981,6 +982,64 @@ def handle_post_release(state: dict, now_utc: datetime) -> None:
             ev = next((e for e in KNOWN_EVENTS if e["id"] == k), None)
             if ev and ev["date_utc"] < cutoff:
                 d.pop(k, None)
+
+
+# ============================================================
+# ИЗМЕНЕНИЯ ВНУТРИ НЕДЕЛИ: если вердикт фактора, общий уклон или отчёт COT изменились
+# ============================================================
+DIGEST_CHECK_EVERY_MIN = 180   # собираем данные раз в 3 часа (не при каждом запуске)
+
+
+def _verdict_sig(snap) -> dict:
+    return {n: f["verdict"] for n, f in snap["factors"].items()}
+
+
+def handle_weekly_changes(state: dict, now_utc: datetime) -> None:
+    """Раз в ~3 часа сравнивает снимок с последним сообщённым. Если изменение (вердикт фактора,
+    уклон или новый отчёт COT) подтвердилось двумя проверками подряд — шлёт «что изменилось»."""
+    if not os.environ.get("FRED_API_KEY"):
+        print("[ЛОГ] Отчёт об изменениях внутри недели отключён: нет FRED_API_KEY в окружении.")
+        return
+    last_check = state.get("digest_last_check")
+    if last_check:
+        try:
+            if (now_utc - datetime.fromisoformat(last_check)).total_seconds() / 60 < DIGEST_CHECK_EVERY_MIN:
+                return
+        except Exception:
+            pass
+    try:
+        import xauusd_numeric_bot as nb
+        snap = nb.compute_snapshot()
+    except Exception as exc:
+        print(f"[WARN] Снимок для отчёта об изменениях не получен: {exc}")
+        return
+    state["digest_last_check"] = now_utc.isoformat()
+    if not snap.get("factors"):
+        return
+    base = state.get("digest_base")
+    if not base:
+        state["digest_base"] = snap
+        return
+
+    names = {n for n, v in _verdict_sig(snap).items() if base["factors"].get(n, {}).get("verdict") != v}
+    cot_changed = bool(snap["raw"].get("cot_date")) and snap["raw"].get("cot_date") != base["raw"].get("cot_date")
+    if cot_changed:
+        names.add("Хедж-фонды")
+    tilt_changed = (snap["bullish"] - snap["bearish"] > 0) != (base["bullish"] - base["bearish"] > 0) \
+        or (snap["bullish"] - snap["bearish"] < 0) != (base["bullish"] - base["bearish"] < 0)
+    if not names and not tilt_changed:
+        state.pop("digest_pending", None)
+        return
+
+    sig = json.dumps([sorted(names), _verdict_sig(snap), snap["raw"].get("cot_date")], sort_keys=True, ensure_ascii=False)
+    if state.get("digest_pending") != sig:
+        state["digest_pending"] = sig     # подтверждаем следующей проверкой, чтобы не ловить «мигание»
+        return
+    send_telegram_message(nb.build_change_report(
+        "", base, snap, names=names,
+        title="🔔 <b>За время с прошлого сообщения изменились данные из сводки:</b>"))
+    state["digest_base"] = snap
+    state.pop("digest_pending", None)
 
 
 def send_demo_messages() -> None:
@@ -1059,6 +1118,7 @@ def main() -> None:
 
     # --- 1б. Отчёт «что изменилось после выхода данных» ---
     handle_post_release(state, now_utc)
+    handle_weekly_changes(state, now_utc)
 
     # --- 2. Проверка резкого движения цены (несколько окон по истории цен) ---
     current_price = fetch_gold_price()

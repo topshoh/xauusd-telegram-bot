@@ -869,6 +869,7 @@ def compute_snapshot():
             "cpi": [cpi[0], cpi[1], cpi[2]] if cpi else None,
             "pce": pce[0] if pce else None,
             "real_yield": real_yield, "dxy": dxy,
+            "cot_date": (cot or {}).get("report_date_as_yyyy_mm_dd", "")[:10] if cot else None,
         },
     }
 
@@ -893,9 +894,11 @@ def release_detected(kind, before, after):
     return True
 
 
-def build_change_report(event_name, before, after):
-    """Сообщение «После выхода <событие> изменилось: …». before может быть None."""
-    lines = [f"🔄 <b>После выхода {html_escape(event_name)} изменилось:</b>", ""]
+def build_change_report(event_name, before, after, title=None, names=None):
+    """Сообщение «После выхода <событие> изменилось: …». before может быть None.
+    title — свой заголовок (для еженедельных изменений); names — показывать только эти факторы."""
+    head = title or f"🔄 <b>После выхода {html_escape(event_name)} изменилось:</b>"
+    lines = [head, ""]
     if not before:
         lines.append("(Снимок «до выхода» не успел сохраниться — показываю текущие данные.)")
         lines.append(f"Уклон сейчас: {_tilt_text(after['bullish'], after['bearish'])}")
@@ -910,6 +913,8 @@ def build_change_report(event_name, before, after):
         lines.append("")
         changed = 0
         for name, f in after["factors"].items():
+            if names is not None and name not in names:
+                continue
             old = before["factors"].get(name)
             if old is None:
                 lines.append(f"• <b>{name}:</b> новый показатель — {f['text']} ({VERDICT_EMOJI[f['verdict']]} {VERDICT_LABEL[f['verdict']].lower()})")
