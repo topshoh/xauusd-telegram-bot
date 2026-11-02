@@ -899,7 +899,7 @@ def send_telegram_message(text: str) -> None:
 # ============================================================
 POST_EVENT_KINDS = {"nfp": "nfp", "cpi": "cpi", "pce": "pce"}
 PRE_SNAPSHOT_WINDOW_MIN = 120      # снимок «до» делаем за 2 часа до выхода
-POST_FIRST_CHECK_MIN = 45          # первая проверка через 45 минут после выхода
+POST_FIRST_CHECK_MIN = 2           # первая проверка через 2 минуты после выхода
 POST_GIVE_UP_HOURS = 48            # после 48 часов перестаём ждать данные в источниках
 
 
@@ -950,7 +950,7 @@ def handle_post_release(state: dict, now_utc: datetime) -> None:
                     f"появились за {POST_GIVE_UP_HOURS} часов. Проверьте вручную или напишите мне «обнови дашборд».")
             continue
         last_try = tries.get(eid)
-        gap = 20 if minutes_after <= 360 else 120   # первые 6 часов — каждые 20 мин, потом реже
+        gap = 10 if minutes_after <= 180 else 120   # первые 3 часа — при каждом запуске (~15 мин), потом раз в 2 часа
         if last_try:
             try:
                 if (now_utc - datetime.fromisoformat(last_try)).total_seconds() / 60 < gap:
