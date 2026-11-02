@@ -913,6 +913,10 @@ def _event_kind(event):
 
 def handle_post_release(state: dict, now_utc: datetime) -> None:
     """Снимок до выхода → отчёт об изменениях после выхода. Любая ошибка не ломает остальные алерты."""
+    if not os.environ.get("FRED_API_KEY"):
+        # В workflow алертов ещё не прописаны ключи FRED/BLS — без них снимок данных пустой.
+        print("[ЛОГ] Отчёт после выхода данных отключён: нет FRED_API_KEY в окружении workflow алертов.")
+        return
     try:
         import xauusd_numeric_bot as nb
     except Exception as exc:
