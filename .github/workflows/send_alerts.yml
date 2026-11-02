@@ -31,4 +31,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GITHUB_TOKEN_FOR_STATE: ${{ secrets.GITHUB_TOKEN }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
         run: python xauusd_alerts_bot.py
