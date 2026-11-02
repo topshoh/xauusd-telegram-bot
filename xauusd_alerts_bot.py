@@ -703,10 +703,11 @@ def build_spike_alert_message(old_price: float, new_price: float, minutes_elapse
 STRESS_SP500_DROP = -1.2    # падение S&P 500 за день, %
 STRESS_VIX_JUMP = 10.0      # рост VIX за день, %
 STRESS_VIX_LEVEL = 30.0     # или уровень VIX выше этого
+STRESS_MAX_AGE_MIN = 360    # данные старше 6 часов (биржа закрыта) — сигнал не подаём
 
 
 def _yahoo_quote(symbol: str):
-    """(текущая цена, закрытие предыдущей сессии) или (None, None)."""
+    """(текущая цена, закрытие предыдущей сессии, возраст данных в минутах) или (None, None, None)."""
     try:
         r = requests.get(
             f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
@@ -718,22 +719,27 @@ def _yahoo_quote(symbol: str):
         price = meta.get("regularMarketPrice")
         prev = meta.get("chartPreviousClose") or meta.get("previousClose")
         if price is None or not prev:
-            return None, None
-        return float(price), float(prev)
+            return None, None, None
+        ts = meta.get("regularMarketTime")
+        age_min = (datetime.now(timezone.utc).timestamp() - ts) / 60 if ts else None
+        return float(price), float(prev), age_min
     except Exception as exc:
         print(f"[WARN] Yahoo {symbol}: {exc}")
-        return None, None
+        return None, None, None
 
 
 def fetch_market_context():
     """{'sp': (цена, изм%), 'vix': (уровень, изм%)} или None, если данных нет."""
-    sp, sp_prev = _yahoo_quote("%5EGSPC")
-    vx, vx_prev = _yahoo_quote("%5EVIX")
+    sp, sp_prev, sp_age = _yahoo_quote("%5EGSPC")
+    vx, vx_prev, vx_age = _yahoo_quote("%5EVIX")
     ctx = {}
     if sp is not None:
         ctx["sp"] = (sp, (sp - sp_prev) / sp_prev * 100)
     if vx is not None:
         ctx["vix"] = (vx, (vx - vx_prev) / vx_prev * 100)
+    ages = [a for a in (sp_age, vx_age) if a is not None]
+    if ctx and ages:
+        ctx["age_min"] = min(ages)   # насколько свежие данные (минуты с последней сделки)
     return ctx or None
 
 
@@ -789,11 +795,15 @@ def context_line(ctx) -> str:
         parts.append(f"S&P 500 {ctx['sp'][1]:+.2f}% за день — {sp_zone(ctx['sp'][1])}")
     if "vix" in ctx:
         parts.append(f"VIX {ctx['vix'][0]:.1f} ({ctx['vix'][1]:+.1f}%) — {vix_zone(ctx['vix'][0])}")
-    return "📊 <b>Рынок сейчас:</b>\n• " + "\n• ".join(parts) + "\n\n"
+    title = "Рынок сейчас" if ctx.get("age_min", 0) <= STRESS_MAX_AGE_MIN else "Рынок (на закрытие предыдущей сессии)"
+    return f"📊 <b>{title}:</b>\n• " + "\n• ".join(parts) + "\n\n"
 
 
 def stress_triggered(ctx) -> bool:
     if not ctx:
+        return False
+    if ctx.get("age_min", 0) > STRESS_MAX_AGE_MIN:
+        print(f"[ЛОГ] Данные по S&P/VIX устарели ({ctx['age_min']:.0f} мин) — биржа закрыта, стресс-сигнал пропущен.")
         return False
     if "sp" in ctx and ctx["sp"][1] <= STRESS_SP500_DROP:
         return True
