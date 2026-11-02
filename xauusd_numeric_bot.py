@@ -422,6 +422,75 @@ def build_market_stress_line() -> str:
 # ============================================================
 def build_event_reminders():
     today = datetime.now(TASHKENT_TZ).date()
+    window = 7 if is_weekend_prep_day() else 3   # в выходные показываем события всей предстоящей недели
+    reminders = []
+    for event in REMINDER_EVENTS:
+        event_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
+        days_until = (event_date - today).days
+        label_upper = event["label"].upper()
+        if 0 < days_until <= window:
+            reminders.append(
+                f"⚠️ <b>ЧЕРЕЗ {days_until} ДН. ВЫХОДИТ: {label_upper}</b>\n"
+                f"Дата: {event_date.strftime('%d.%m.%Y')}\n\n"
+                f"ПОСЛЕ ВЫХОДА ЭТИХ ДАННЫХ СТОИТ ПОПРОСИТЬ «ОБНОВИ ДАШБОРД»."
+            )
+        elif -2 <= days_until <= 0:
+            reminders.append(
+                f"🔔 <b>{label_upper} УЖЕ ВЫШЕЛ</b> ({event_date.strftime('%d.%m.%Y')})\n\n"
+                f"ЕСЛИ ЕЩЁ НЕ ПРОСИЛИ ОБНОВИТЬ ДАШБОРД — СЕЙЧАС САМОЕ ВРЕМЯ."
+            )
+    return reminders
+
+
+def build_token_hygiene_reminder():
+    """Раз в месяц — напоминание проверить GitHub-токен.
+
+    ИСПРАВЛЕНО: раньше проверяло строго 'today.day == 1' — если 1-е число
+    попадало на закрытый рынком день (суббота/воскресенье), бот в этот
+    день вообще не запускал отправку (см. is_market_closed в main()), и
+    напоминание молча пропадало на весь месяц. Теперь ищем ПЕРВЫЙ
+    открытый день месяца (проверяем 1, 2, 3 числа по очереди) и шлём
+    именно в этот день — 1-го, 2-го или 3-го, смотря по обстоятельствам."""
+    now = datetime.now(TASHKENT_TZ)
+    first_open_day = None
+    for day_num in range(1, 4):  # у длинных выходных на стыке месяцев больше 2 дней подряд не бывает
+        candidate = now.replace(day=day_num, hour=12, minute=0, second=0, microsecond=0)
+        if not _is_market_closed_at(candidate):
+            first_open_day = day_num
+            break
+    if first_open_day is not None and now.day == first_open_day:
+        return (
+            f"🔐 <b>ЕЖЕМЕСЯЧНОЕ НАПОМИНАНИЕ: ПРОВЕРЬТЕ GITHUB-ТОКЕН</b>\n\n"
+            f"Зайдите в Settings → Developer settings → Personal access tokens "
+            f"и убедитесь, что токен ещё нужен, не истёк и не выдан с более "
+            f"широкими правами, чем требуется (для этого проекта достаточно "
+            f"Contents: Read/write)."
+        )
+    return None
+
+
+def is_weekend_prep_day():
+    """Суббота или воскресенье по Ташкенту — «подготовка к неделе»."""
+    return datetime.now(TASHKENT_TZ).weekday() in (5, 6)
+
+
+def is_full_report_day():
+    """Полную сводку шлём в субботу и воскресенье (чтобы подготовиться к понедельнику,
+    пока рынок закрыт). В будни бот только проверяет напоминания о событиях (см. main()),
+    чтобы не спамить одними и теми же цифрами каждый день."""
+    return is_weekend_prep_day()
+
+
+# ============================================================
+# СБОРКА СООБЩЕНИЯ
+# ============================================================
+
+# ============================================================
+# БОЛЬШИЕ НАПОМИНАНИЯ (заглавными буквами) — про важные даты и про
+# гигиену GitHub-токена. Не требуют state-файла: просто математика дат.
+# ============================================================
+def build_event_reminders():
+    today = datetime.now(TASHKENT_TZ).date()
     reminders = []
     for event in REMINDER_EVENTS:
         event_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
@@ -618,9 +687,11 @@ def build_messages():
 
     lines = [
         f"🥇 <b>XAUUSD — сводка</b> ({now_str}, Ташкент)",
+        ("🗓 <b>Подготовка к неделе:</b> рынок закрыт, цена — на закрытие пятницы." if is_weekend_prep_day() else None),
         "",
         f"{tilt_emoji} <b>УКЛОН СЕЙЧАС: {strength}{tilt_label} ({len(bullish)} против {len(bearish)})</b>",
     ]
+    lines = [x for x in lines if x is not None]
 
     if bullish:
         lines.append(f"\n🟢 <b>Бычьи ({len(bullish)}):</b>")
@@ -774,9 +845,9 @@ def send_telegram_message(text: str):
 
 def main():
     force_test = os.environ.get("FORCE_TEST_RUN", "").lower() == "true"
-    if is_market_closed() and not force_test:
-        print("Рынок закрыт (выходные) — сообщение не отправляется. "
-              "(Чтобы протестировать в выходной, запустите workflow с FORCE_TEST_RUN=true.)")
+    if is_market_closed() and not force_test and not is_weekend_prep_day():
+        print("Рынок закрыт — сообщение не отправляется. "
+              "(Чтобы протестировать, запустите workflow с FORCE_TEST_RUN=true.)")
         return
     if force_test:
         print("⚠️ FORCE_TEST_RUN включён — игнорирую проверку на закрытый рынок (тестовый прогон).")
@@ -800,7 +871,7 @@ def main():
         if cot_msg:
             messages.append(cot_msg)
     else:
-        print("Не понедельник и нет напоминаний рядом — сегодня бот молчит (это ожидаемо, не баг).")
+        print("Сегодня не суббота/воскресенье и нет напоминаний рядом — бот молчит (это ожидаемо, не баг).")
 
     if not messages:
         print("Сообщений к отправке нет.")
