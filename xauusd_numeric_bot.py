@@ -248,11 +248,11 @@ def fetch_fred_yoy(series_id: str, n_points: int = 13):
 #    NFP тут отдаёт УРОВЕНЬ занятости, не месячное изменение напрямую —
 #    для изменения нужно брать разницу двух последних точек (сделано ниже).
 # ============================================================
-def fetch_bls_series(series_id: str, n_points: int = 2):
+def fetch_bls_series(series_id: str, n_points: int = 2, years_back: int = 1):
     url = f"https://api.bls.gov/publicAPI/v2/timeseries/data/{series_id}"
     payload = {"seriesid": [series_id], "latest": "true" if n_points == 1 else "false"}
     if not n_points == 1:
-        payload["startyear"] = str(datetime.now().year - 1)
+        payload["startyear"] = str(datetime.now().year - years_back)
         payload["endyear"] = str(datetime.now().year)
     if BLS_API_KEY:
         payload["registrationkey"] = BLS_API_KEY
@@ -271,23 +271,56 @@ def fetch_bls_series(series_id: str, n_points: int = 2):
 
 
 def fetch_cpi_yoy():
-    """CPI год к году — берём текущую и точку 12 месяцев назад и считаем % сами,
-    так как BLS отдаёт индекс, а не готовый % изменения. Дополнительно
-    считаем CPI год к году МЕСЯЦ НАЗАД (точки [1] и [13]) — чтобы можно
-    было показать "было X%, стало Y%" для сравнения."""
-    points = fetch_bls_series("CUUR0000SA0", n_points=14)
-    if len(points) < 14:
+    """CPI год к году: (yoy, «Месяц Год», yoy_месяц_назад) или None.
+
+    ИСПРАВЛЕНО 20.11.2026: BLS не публиковал CPI за октябрь 2025 (пауза в работе правительства),
+    в API это месяц со значением "-". Раньше бот брал точку «12 позиций назад» по индексу и падал
+    с ValueError на этом "-" (после выхода октябрьского CPI 10.11.2026). Теперь точки с пустыми
+    значениями пропускаются, а базу ищем строго по тому же месяцу прошлого года. Если базы нет
+    (октябрь 2026 к октябрю 2025) — берём последний месяц, для которого год к году посчитать можно.
+    """
+    points = fetch_bls_series("CUUR0000SA0", n_points=48, years_back=3)
+    values, names = {}, {}
+    for pt in points:
+        try:
+            period = pt["period"]
+            if not period.startswith("M") or period == "M13":
+                continue
+            key = (int(pt["year"]), int(period[1:]))
+            values[key] = float(pt["value"])
+            names[key] = pt["periodName"]
+        except (KeyError, ValueError, TypeError):
+            continue   # пустое значение ("-") или неожиданный формат — пропускаем
+    if not values:
         return None
-    latest = float(points[0]["value"])
-    year_ago = float(points[12]["value"])
-    yoy = (latest - year_ago) / year_ago * 100
 
-    prev_month = float(points[1]["value"])
-    prev_year_ago = float(points[13]["value"])
-    prev_yoy = (prev_month - prev_year_ago) / prev_year_ago * 100
+    def yoy_for(key):
+        base = values.get((key[0] - 1, key[1]))
+        if base is None or key not in values:
+            return None
+        return (values[key] - base) / base * 100
 
-    period_label = f"{points[0]['periodName']} {points[0]['year']}"
-    return round(yoy, 2), period_label, round(prev_yoy, 2)
+    def prev_month(key):
+        y, m = key
+        return (y - 1, 12) if m == 1 else (y, m - 1)
+
+    first_try = key = max(values)
+    for _ in range(3):
+        if yoy_for(key) is not None:
+            break
+        key = prev_month(key)
+    else:
+        return None
+    note = ""
+    if key != first_try:
+        ru = ["", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август",
+              "сентябрь", "октябрь", "ноябрь", "декабрь"]
+        note = f" (год к году за {ru[first_try[1]]} {first_try[0]} посчитать нельзя: нет базы)"
+    yoy = yoy_for(key)
+    prev_yoy = yoy_for(prev_month(key))
+    if prev_yoy is None:
+        prev_yoy = yoy
+    return round(yoy, 2), f"{names[key]} {key[0]}{note}", round(prev_yoy, 2)
 
 
 def fetch_nfp_change():
@@ -479,70 +512,6 @@ def is_full_report_day():
     пока рынок закрыт). В будни бот только проверяет напоминания о событиях (см. main()),
     чтобы не спамить одними и теми же цифрами каждый день."""
     return is_weekend_prep_day()
-
-
-# ============================================================
-# СБОРКА СООБЩЕНИЯ
-# ============================================================
-
-# ============================================================
-# БОЛЬШИЕ НАПОМИНАНИЯ (заглавными буквами) — про важные даты и про
-# гигиену GitHub-токена. Не требуют state-файла: просто математика дат.
-# ============================================================
-def build_event_reminders():
-    today = datetime.now(TASHKENT_TZ).date()
-    reminders = []
-    for event in REMINDER_EVENTS:
-        event_date = datetime.strptime(event["date"], "%Y-%m-%d").date()
-        days_until = (event_date - today).days
-        label_upper = event["label"].upper()
-        if 0 < days_until <= 3:
-            reminders.append(
-                f"⚠️ <b>ЧЕРЕЗ {days_until} ДН. ВЫХОДИТ: {label_upper}</b>\n"
-                f"Дата: {event_date.strftime('%d.%m.%Y')}\n\n"
-                f"ПОСЛЕ ВЫХОДА ЭТИХ ДАННЫХ СТОИТ ПОПРОСИТЬ «ОБНОВИ ДАШБОРД»."
-            )
-        elif -2 <= days_until <= 0:
-            reminders.append(
-                f"🔔 <b>{label_upper} УЖЕ ВЫШЕЛ</b> ({event_date.strftime('%d.%m.%Y')})\n\n"
-                f"ЕСЛИ ЕЩЁ НЕ ПРОСИЛИ ОБНОВИТЬ ДАШБОРД — СЕЙЧАС САМОЕ ВРЕМЯ."
-            )
-    return reminders
-
-
-def build_token_hygiene_reminder():
-    """Раз в месяц — напоминание проверить GitHub-токен.
-
-    ИСПРАВЛЕНО: раньше проверяло строго 'today.day == 1' — если 1-е число
-    попадало на закрытый рынком день (суббота/воскресенье), бот в этот
-    день вообще не запускал отправку (см. is_market_closed в main()), и
-    напоминание молча пропадало на весь месяц. Теперь ищем ПЕРВЫЙ
-    открытый день месяца (проверяем 1, 2, 3 числа по очереди) и шлём
-    именно в этот день — 1-го, 2-го или 3-го, смотря по обстоятельствам."""
-    now = datetime.now(TASHKENT_TZ)
-    first_open_day = None
-    for day_num in range(1, 4):  # у длинных выходных на стыке месяцев больше 2 дней подряд не бывает
-        candidate = now.replace(day=day_num, hour=12, minute=0, second=0, microsecond=0)
-        if not _is_market_closed_at(candidate):
-            first_open_day = day_num
-            break
-    if first_open_day is not None and now.day == first_open_day:
-        return (
-            f"🔐 <b>ЕЖЕМЕСЯЧНОЕ НАПОМИНАНИЕ: ПРОВЕРЬТЕ GITHUB-ТОКЕН</b>\n\n"
-            f"Зайдите в Settings → Developer settings → Personal access tokens "
-            f"и убедитесь, что токен ещё нужен, не истёк и не выдан с более "
-            f"широкими правами, чем требуется (для этого проекта достаточно "
-            f"Contents: Read/write)."
-        )
-    return None
-
-
-def is_full_report_day():
-    """Полную сводку из 7 сообщений шлём по понедельникам — в остальные
-    дни бот только проверяет напоминания (см. main()), чтобы не спамить
-    одними и теми же цифрами каждый день."""
-    today = datetime.now(TASHKENT_TZ)
-    return today.weekday() == 0  # 0 = понедельник
 
 
 # ============================================================
@@ -974,21 +943,37 @@ def main():
     # одно напоминание (иначе бот молчит, чтобы не спамить).
     messages = []
 
-    event_reminders = build_event_reminders()
+    errors = []
+
+    def safe(label, fn, default=None):
+        try:
+            return fn()
+        except Exception as exc:   # не роняем весь запуск из-за одной части
+            import traceback
+            traceback.print_exc()
+            errors.append(f"{label}: {type(exc).__name__}: {exc}")
+            return default
+
+    event_reminders = safe("напоминания о событиях", build_event_reminders, [])
     messages.extend(event_reminders)
 
-    token_reminder = build_token_hygiene_reminder()
+    token_reminder = safe("напоминание про токен", build_token_hygiene_reminder)
     if token_reminder:
         messages.append(token_reminder)
 
     full_report_triggered = is_full_report_day() or len(event_reminders) > 0 or force_test
     if full_report_triggered:
-        messages.extend(build_messages())
-        cot_msg = build_cot_report()
+        messages.extend(safe("основная сводка", build_messages, []))
+        cot_msg = safe("отчёт COT", build_cot_report)
         if cot_msg:
             messages.append(cot_msg)
     else:
         print("Сегодня не суббота/воскресенье и нет напоминаний рядом — бот молчит (это ожидаемо, не баг).")
+
+    if errors:
+        messages.append("⚠️ <b>Бот не смог собрать часть сообщений</b> (остальное отправлено):\n"
+                        + "\n".join("• " + html_escape(e)[:300] for e in errors)
+                        + "\n\nНапишите мне «бот выдаёт ошибку», я исправлю.")
 
     if not messages:
         print("Сообщений к отправке нет.")
